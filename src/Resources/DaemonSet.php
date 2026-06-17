@@ -50,7 +50,7 @@ class DaemonSet extends Resource
     /** @param array<string, string> $selectors */
     public function setPodsSelectors(array $selectors): static
     {
-        return $this->setSpec('selector.matchLabels', $selectors);
+        return $this->setMatchLabelsSelector('selector', $selectors);
     }
 
     public function getDesiredNumberScheduled(): int

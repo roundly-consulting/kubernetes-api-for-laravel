@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Resources;
 
+use RoundlyConsulting\KubernetesApi\Resources\Types\EmptyObject;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\CanScale;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasReplicas;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSpec;
@@ -25,6 +26,12 @@ class ReplicationController extends Resource
     /** @param array<string, string> $selector */
     public function setPodsSelectors(array $selector): static
     {
+        // A ReplicationController uses a flat label map (not matchLabels); an
+        // empty selector matches all pods and must serialise as `{}`, not `[]`.
+        if ($selector === []) {
+            return $this->setSpec('selector', new EmptyObject);
+        }
+
         return $this->setSpec('selector', $selector);
     }
 

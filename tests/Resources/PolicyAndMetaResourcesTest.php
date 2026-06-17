@@ -9,6 +9,7 @@ use RoundlyConsulting\KubernetesApi\Resources\LimitRange;
 use RoundlyConsulting\KubernetesApi\Resources\NetworkPolicy;
 use RoundlyConsulting\KubernetesApi\Resources\ResourceQuota;
 use RoundlyConsulting\KubernetesApi\Resources\ServiceAccount;
+use RoundlyConsulting\KubernetesApi\Resources\Types\EmptyObject;
 
 it('reads event fields', function () {
     $event = Event::make([
@@ -81,6 +82,27 @@ it('configures a network policy', function () {
         ->and($policy->getPolicyTypes())->toBe(['Ingress', 'Egress'])
         ->and($policy->getSpec('ingress'))->toHaveCount(1)
         ->and($policy->getSpec('egress'))->toHaveCount(1);
+});
+
+it('serialises a select-all pod selector as the empty object', function () {
+    $policy = NetworkPolicy::make()->setName('allow-all')->setPodSelector([]);
+
+    expect($policy->getSpec('podSelector'))->toBeInstanceOf(EmptyObject::class)
+        ->and($policy->getPodSelector())->toBe([]);
+
+    $json = $policy->toJson();
+
+    expect($json)->toContain('"podSelector":{}')
+        ->and($json)->not->toContain('"podSelector":[]');
+});
+
+it('replaces a labelled pod selector when reset to select-all', function () {
+    $policy = NetworkPolicy::make()
+        ->setPodSelector(['app' => 'api'])
+        ->setPodSelector([]);
+
+    expect($policy->getSpec('podSelector'))->toBeInstanceOf(EmptyObject::class)
+        ->and($policy->getSpec('podSelector.matchLabels'))->toBeNull();
 });
 
 it('configures a horizontal pod autoscaler', function () {

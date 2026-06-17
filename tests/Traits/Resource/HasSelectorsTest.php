@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use RoundlyConsulting\KubernetesApi\Resources\Types\EmptyObject;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSelectors;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSpec;
 
@@ -50,4 +51,29 @@ it('stores selectors in spec', function () {
 
     $instance->setSelectors(['run' => 'web']);
     expect($instance->getSpec('selector'))->toBe(['run' => 'web']);
+});
+
+it('serialises an empty selector as the empty object so it is not rejected as a list', function () {
+    $instance = new class
+    {
+        use HasSelectors;
+    };
+
+    $instance->setSelectors([]);
+
+    expect($instance->getSpec('selector'))->toBeInstanceOf(EmptyObject::class)
+        ->and(json_decode(json_encode($instance->getSpec('selector')), true))->toBe([])
+        ->and($instance->getSelectors())->toBe([]);
+});
+
+it('replaces a previously-set selector map when set to empty', function () {
+    $instance = new class
+    {
+        use HasSelectors;
+    };
+
+    $instance->setSelectors(['run' => 'app']);
+    $instance->setSelectors([]);
+
+    expect($instance->getSpec('selector'))->toBeInstanceOf(EmptyObject::class);
 });

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Resources;
 
+use RoundlyConsulting\KubernetesApi\Resources\Types\EmptyObject;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSpec;
 
 class NetworkPolicy extends Resource
@@ -21,6 +22,13 @@ class NetworkPolicy extends Resource
     /** @param array<string, string> $labels */
     public function setPodSelector(array $labels): static
     {
+        // An empty podSelector means "select all pods in the namespace" and the
+        // apiserver requires it as the empty object `{}` — an empty PHP array
+        // would serialise to `[]`, which Kubernetes rejects.
+        if ($labels === []) {
+            return $this->setSpec('podSelector', new EmptyObject);
+        }
+
         return $this->setSpec('podSelector.matchLabels', $labels);
     }
 

@@ -123,6 +123,25 @@ it('creates and reads a network policy without enforcement', function () {
     $found->delete();
 });
 
+it('creates a select-all network policy with an empty pod selector', function () {
+    // An empty podSelector must serialise to `{}` (select all pods); the
+    // apiserver rejects `[]`. This proves the EmptyObject fix end-to-end.
+    $policy = NetworkPolicy::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('default-deny')
+        ->setPodSelector([])
+        ->setPolicyTypes(['Ingress']);
+
+    expect($policy->create()->wasRecentlyCreated())->toBeTrue();
+
+    $found = NetworkPolicy::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('default-deny')->find();
+
+    // A select-all policy reads back with an empty matchLabels map.
+    expect($found->getPolicyTypes())->toBe(['Ingress'])
+        ->and($found->getPodSelector())->toBe([])
+        ->and($found->getSpec('podSelector'))->toBe([]);
+
+    $found->delete();
+});
+
 it('creates and reads a horizontal pod autoscaler against a deployment', function () {
     Deployment::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('scaler')
         ->setReplicas(1)

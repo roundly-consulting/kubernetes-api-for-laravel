@@ -10,6 +10,7 @@ use RoundlyConsulting\KubernetesApi\Resources\ReplicaSet;
 use RoundlyConsulting\KubernetesApi\Resources\ReplicationController;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
 use RoundlyConsulting\KubernetesApi\Resources\StatefulSet;
+use RoundlyConsulting\KubernetesApi\Resources\Types\EmptyObject;
 use RoundlyConsulting\KubernetesApi\Resources\Types\PersistentVolumeClaimTemplate;
 
 it('configures a replica set', function () {
@@ -155,4 +156,15 @@ it('configures a replication controller', function () {
         ->and($rc->getPodsSelectors())->toBe(['app' => 'legacy'])
         ->and($rc->getReadyReplicasCount())->toBe(2)
         ->and($rc->getAvailableReplicasCount())->toBe(2);
+});
+
+it('serialises an empty replication controller selector as the empty object', function () {
+    $rc = ReplicationController::make()->setName('legacy')->setPodsSelectors([]);
+
+    expect($rc->getSpec('selector'))
+        ->toBeInstanceOf(EmptyObject::class)
+        ->and($rc->getPodsSelectors())->toBe([]);
+
+    expect($rc->toJson())->toContain('"selector":{}')
+        ->and($rc->toJson())->not->toContain('"selector":[]');
 });

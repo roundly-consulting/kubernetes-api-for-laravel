@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
+use RoundlyConsulting\KubernetesApi\Resources\Types\EmptyObject;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasReplicas;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSelectors;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSpec;
@@ -148,6 +149,17 @@ it('sets pods selectors', function () {
 
     expect($deployment->getSpec('selector.matchLabels'))
         ->toBe(['app' => 'my', 'stage' => 'prod']);
+});
+
+it('serialises an empty pod selector as the empty object', function () {
+    $deployment = Deployment::make()->setName('app')->setPodsSelectors([]);
+
+    expect($deployment->getSpec('selector'))
+        ->toBeInstanceOf(EmptyObject::class)
+        ->and($deployment->getPodsSelectors())->toBe([]);
+
+    expect($deployment->toJson())->toContain('"selector":{}')
+        ->and($deployment->toJson())->not->toContain('"selector":[]');
 });
 
 it('returns replicas count', function () {
