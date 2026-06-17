@@ -14,6 +14,12 @@ class TraefikMiddleware extends Resource
 
     protected string $kind = 'Middleware';
 
+    /**
+     * "Middleware" is uncountable, so the naive pluraliser leaves it unchanged;
+     * the CRD REST plural is "middlewares", so it must be set explicitly.
+     */
+    protected ?string $plural = 'middlewares';
+
     protected bool $usesNamespaces = true;
 
     /** @param array<string, mixed> $attributes */

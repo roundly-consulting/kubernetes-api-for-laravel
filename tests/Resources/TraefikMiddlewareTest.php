@@ -21,6 +21,12 @@ it('uses namespaces', function () {
     expect(TraefikMiddleware::make()->usesNamespaces())->toBeTrue();
 });
 
+it('overrides the uncountable plural so the rest path is middlewares', function () {
+    // "Middleware" is uncountable, so the naive pluraliser leaves it unchanged;
+    // the CRD REST plural must be the explicit "middlewares".
+    expect(TraefikMiddleware::make()->getPluralKind())->toBe('middlewares');
+});
+
 it('honours the configured traefik api group for back-compat', function () {
     config()->set('kubernetes.traefik.group', 'traefik.containo.us/v1alpha1');
 
