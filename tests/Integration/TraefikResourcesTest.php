@@ -2,8 +2,12 @@
 
 declare(strict_types=1);
 
+use RoundlyConsulting\KubernetesApi\Resources\Secret;
 use RoundlyConsulting\KubernetesApi\Resources\TraefikIngressRoute;
 use RoundlyConsulting\KubernetesApi\Resources\TraefikMiddleware;
+use RoundlyConsulting\KubernetesApi\Resources\TraefikServersTransport;
+use RoundlyConsulting\KubernetesApi\Resources\TraefikTlsOption;
+use RoundlyConsulting\KubernetesApi\Resources\TraefikTlsStore;
 use RoundlyConsulting\KubernetesApi\Resources\Types\TraefikRoute;
 use RoundlyConsulting\KubernetesApi\Resources\Types\TraefikService;
 use RoundlyConsulting\KubernetesApi\Tests\Integration\ClusterFactory;
@@ -76,6 +80,53 @@ it('creates, reads and deletes a traefik middleware', function () {
     expect($redirect)->toBeArray()
         ->and($redirect['scheme'])->toBe('https')
         ->and($redirect['permanent'])->toBeTrue();
+
+    $found->delete();
+});
+
+it('creates, reads and deletes a traefik tls store referencing a tls secret', function () {
+    ['cert' => $cert, 'key' => $key] = ClusterFactory::selfSignedCertificate('store.example.test');
+
+    Secret::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('default-tls')
+        ->asTlsCertificate($cert, $key)
+        ->create();
+
+    $store = TraefikTlsStore::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('default')
+        ->setDefaultCertificate('default-tls');
+
+    expect($store->create()->wasRecentlyCreated())->toBeTrue();
+
+    $found = TraefikTlsStore::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('default')->find();
+
+    expect($found->getDefaultCertificate())->toBe('default-tls');
+
+    $found->delete();
+});
+
+it('creates, reads and deletes a traefik servers transport', function () {
+    $transport = TraefikServersTransport::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('backend')
+        ->setServerName('backend.internal')
+        ->insecureSkipVerify();
+
+    expect($transport->create()->wasRecentlyCreated())->toBeTrue();
+
+    $found = TraefikServersTransport::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('backend')->find();
+
+    expect($found->getServerName())->toBe('backend.internal')
+        ->and($found->getInsecureSkipVerify())->toBeTrue();
+
+    $found->delete();
+});
+
+it('creates, reads and deletes a traefik tls option', function () {
+    $option = TraefikTlsOption::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('modern')
+        ->setMinVersion('VersionTLS12');
+
+    expect($option->create()->wasRecentlyCreated())->toBeTrue();
+
+    $found = TraefikTlsOption::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('modern')->find();
+
+    expect($found->getMinVersion())->toBe('VersionTLS12');
 
     $found->delete();
 });

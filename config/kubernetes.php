@@ -52,5 +52,8 @@ return [
         'storageClasses' => Resources\StorageClass::class,
         'traefikIngressRoutes' => Resources\TraefikIngressRoute::class,
         'traefikMiddlewares' => Resources\TraefikMiddleware::class,
+        'traefikServersTransports' => Resources\TraefikServersTransport::class,
+        'traefikTlsOptions' => Resources\TraefikTlsOption::class,
+        'traefikTlsStores' => Resources\TraefikTlsStore::class,
     ],
 ];

@@ -32,6 +32,9 @@ use RoundlyConsulting\KubernetesApi\Traits\Makeable;
  * @method \RoundlyConsulting\KubernetesApi\Resources\ServiceAccount serviceAccounts()
  * @method \RoundlyConsulting\KubernetesApi\Resources\TraefikIngressRoute traefikIngressRoutes()
  * @method \RoundlyConsulting\KubernetesApi\Resources\TraefikMiddleware traefikMiddlewares()
+ * @method \RoundlyConsulting\KubernetesApi\Resources\TraefikServersTransport traefikServersTransports()
+ * @method \RoundlyConsulting\KubernetesApi\Resources\TraefikTlsOption traefikTlsOptions()
+ * @method \RoundlyConsulting\KubernetesApi\Resources\TraefikTlsStore traefikTlsStores()
  *
  * @phpstan-consistent-constructor
  */

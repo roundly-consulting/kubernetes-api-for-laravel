@@ -10,6 +10,9 @@ use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 use RoundlyConsulting\KubernetesApi\Resources\Pod;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
 use RoundlyConsulting\KubernetesApi\Resources\StatefulSet;
+use RoundlyConsulting\KubernetesApi\Resources\TraefikServersTransport;
+use RoundlyConsulting\KubernetesApi\Resources\TraefikTlsOption;
+use RoundlyConsulting\KubernetesApi\Resources\TraefikTlsStore;
 use RoundlyConsulting\KubernetesApi\Traits\HasAuthentication;
 use RoundlyConsulting\KubernetesApi\Traits\HasManagerName;
 use RoundlyConsulting\KubernetesApi\Traits\HasUrl;
@@ -77,6 +80,15 @@ it('exposes strongly typed, cluster-bound resource accessors', function () {
         ->and($kubernetes->pods()->getCluster())->toBe($kubernetes)
         ->and($kubernetes->deployments())->toBeInstanceOf(Deployment::class)
         ->and($kubernetes->statefulSets())->toBeInstanceOf(StatefulSet::class);
+});
+
+it('registers the traefik tls and transport accessors from config', function () {
+    $kubernetes = (new Kubernetes)->setManagerName('traefik');
+
+    expect($kubernetes->traefikTlsStores())->toBeInstanceOf(TraefikTlsStore::class)
+        ->and($kubernetes->traefikTlsStores()->getCluster())->toBe($kubernetes)
+        ->and($kubernetes->traefikServersTransports())->toBeInstanceOf(TraefikServersTransport::class)
+        ->and($kubernetes->traefikTlsOptions())->toBeInstanceOf(TraefikTlsOption::class);
 });
 
 it('resolves an arbitrary resource class bound to the cluster', function () {
