@@ -15,6 +15,17 @@ All notable changes to `kubernetes-api-for-laravel` will be documented in this f
   ServiceAccount, Role, RoleBinding, ClusterRole, ClusterRoleBinding, NetworkPolicy,
   HorizontalPodAutoscaler, ResourceQuota, LimitRange, and ReplicationController, each with
   typed helpers and registered in `config/kubernetes.php`.
+- **New Traefik resources:** `TraefikTlsStore` (kind `TLSStore`, with
+  `setDefaultCertificate()`), `TraefikServersTransport` (kind `ServersTransport`, with
+  `setServerName()`, `insecureSkipVerify()`, root-CA and client-cert Secret refs), and
+  `TraefikTlsOption` (kind `TLSOption`, with `setMinVersion()`/`setMaxVersion()`/
+  `setCipherSuites()`). Their REST plurals (`tlsstores`, `serverstransports`, `tlsoptions`)
+  are pinned to the real CRDs, they honour `kubernetes.traefik.group`, and they are exposed
+  via the `traefikTlsStores()`, `traefikServersTransports()`, and `traefikTlsOptions()`
+  cluster accessors.
+- **TLS certificate Secrets:** `Secret::setType()` / `Secret::getType()` and
+  `Secret::asTlsCertificate($cert, $key)`, which builds a `kubernetes.io/tls` Secret by
+  base64-encoding the PEM certificate and key into `data['tls.crt']` and `data['tls.key']`.
 - **Operational verbs:** `patch()` (strategic-merge / merge / JSON Patch / server-side apply),
   `dryRun()`, `scale()` (via the `/scale` subresource), `rolloutRestart()`, and `watch()`.
 - **Pod logs and exec:** `Pod::logs()` / `Pod::streamLogs()` and `Pod::exec()` — the latter over
@@ -60,9 +71,16 @@ All notable changes to `kubernetes-api-for-laravel` will be documented in this f
   `/apis/traefik.io/v1alpha1/namespaces/{ns}/middleware` — a 404 against a real cluster. The
   resource now declares the explicit plural `middlewares`, matching the CRD. No code change is
   needed in consuming apps.
-- **Traefik resources are now covered by the live integration suite.** `IngressRoute` and
-  `Middleware` create/read/delete against a real Traefik v3 install on the OrbStack cluster,
-  using a valid `services` reference on each route as the CRD requires.
+- **Traefik resources are now covered by the live integration suite.** `IngressRoute`,
+  `Middleware`, `TLSStore`, `ServersTransport`, and `TLSOption` create/read/delete against a
+  real Traefik v3 install on the OrbStack cluster, using a valid `services` reference on each
+  route as the CRD requires.
+- **Empty / select-all selectors now serialise as `{}`.** `NetworkPolicy::setPodSelector([])`,
+  `Service::setSelectors([])`, and the workload pod selectors (`Deployment`, `ReplicaSet`,
+  `StatefulSet`, `DaemonSet`, `ReplicationController`) previously emitted an empty matchLabels
+  map as `[]`, which the apiserver rejects. An empty selector is now routed through the
+  `EmptyObject` marker so it serialises as the empty object `{}` (the "select all" / "match
+  all" semantics), while the getters still return `[]`.
 
 ### Deprecated
 

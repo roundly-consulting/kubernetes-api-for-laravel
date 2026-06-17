@@ -86,6 +86,9 @@ return [
         'storageClasses' => Resources\StorageClass::class,
         'traefikIngressRoutes' => Resources\TraefikIngressRoute::class,
         'traefikMiddlewares' => Resources\TraefikMiddleware::class,
+        'traefikServersTransports' => Resources\TraefikServersTransport::class,
+        'traefikTlsOptions' => Resources\TraefikTlsOption::class,
+        'traefikTlsStores' => Resources\TraefikTlsStore::class,
     ],
 ];
 ```
@@ -100,7 +103,8 @@ The built-in accessors cover config maps, secrets, pods, deployments, replica se
 sets, daemon sets, replication controllers, jobs, cron jobs, services, endpoints, ingresses,
 namespaces, nodes, events, persistent volumes and claims, storage classes, RBAC
 (roles/role bindings/cluster roles/cluster role bindings/service accounts), network policies,
-horizontal pod autoscalers, resource quotas, limit ranges, and the Traefik CRDs.
+horizontal pod autoscalers, resource quotas, limit ranges, and the Traefik CRDs
+(`IngressRoute`, `Middleware`, `TLSStore`, `ServersTransport`, `TLSOption`).
 
 The package works with zero configuration — clusters are defined in code (see below) and the
 default `resources` map ships built in.
@@ -364,6 +368,81 @@ $pod = Pod::make()
             ->setMinimumMemory(256, 'Mi')
             ->setReadinessProbe(Probe::http('/healthz', 8080)),
     ]);
+```
+
+### TLS certificate secrets
+
+`Secret` supports a typed `type` plus a TLS convenience that base64-encodes a PEM
+certificate and key into a `kubernetes.io/tls` Secret:
+
+```php
+use RoundlyConsulting\KubernetesApi\Resources\Secret;
+
+$secret = $cluster->secrets()
+    ->setNamespace('default')
+    ->setName('wildcard-tls')
+    ->asTlsCertificate($pemCertificate, $pemPrivateKey)   // sets type + data['tls.crt'] / data['tls.key']
+    ->create();
+
+$secret->getType();              // "kubernetes.io/tls"
+$secret->getData('tls.crt');     // the decoded PEM certificate
+
+// Or set an arbitrary Secret type explicitly:
+$cluster->secrets()->setName('dockercfg')->setType('kubernetes.io/dockerconfigjson');
+```
+
+### Select-all and empty selectors
+
+An empty label selector means "select all" in Kubernetes and must be sent as the empty
+object `{}`, not `[]` (which the apiserver rejects). The selector setters handle this for
+you — passing an empty array serialises correctly:
+
+```php
+use RoundlyConsulting\KubernetesApi\Resources\NetworkPolicy;
+
+// Default-deny / select-all: an empty podSelector matches every pod in the namespace.
+$cluster->networkPolicies()
+    ->setNamespace('default')
+    ->setName('default-deny')
+    ->setPodSelector([])           // serialises to "podSelector": {}
+    ->setPolicyTypes(['Ingress'])
+    ->create();
+```
+
+The same applies to `Service::setSelectors([])` and the workload pod selectors
+(`Deployment`, `ReplicaSet`, `StatefulSet`, `DaemonSet`, `ReplicationController`).
+
+### Traefik TLS and transport CRDs
+
+Beyond `IngressRoute` and `Middleware`, the package ships first-class resources for
+Traefik's TLS and transport CRDs. Their REST plurals (`tlsstores`, `serverstransports`,
+`tlsoptions`) are pinned to match the real CRDs, and they honour the configurable
+`kubernetes.traefik.group`:
+
+```php
+// Point a default certificate at a kubernetes.io/tls Secret.
+$cluster->traefikTlsStores()
+    ->setNamespace('default')
+    ->setName('default')
+    ->setDefaultCertificate('wildcard-tls')
+    ->create();
+
+// Configure how Traefik dials a backend.
+$cluster->traefikServersTransports()
+    ->setNamespace('default')
+    ->setName('backend')
+    ->setServerName('backend.internal')
+    ->insecureSkipVerify()
+    ->setRootCAsSecrets(['backend-ca'])
+    ->create();
+
+// Constrain TLS versions and cipher suites.
+$cluster->traefikTlsOptions()
+    ->setNamespace('default')
+    ->setName('modern')
+    ->setMinVersion('VersionTLS12')
+    ->setCipherSuites(['TLS_AES_256_GCM_SHA384'])
+    ->create();
 ```
 
 ### Attributes, labels, and annotations
