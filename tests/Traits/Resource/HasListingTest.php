@@ -69,3 +69,9 @@ it('ignores empty continue tokens', function () {
 
     Http::assertSent(fn (Request $r) => ! str_contains($r->url(), 'continue='));
 });
+
+it('reports whether label selectors are present', function () {
+    expect($this->pods->hasLabelSelectors())->toBeFalse();
+
+    expect($this->pods->whereLabel('app', 'api')->hasLabelSelectors())->toBeTrue();
+});

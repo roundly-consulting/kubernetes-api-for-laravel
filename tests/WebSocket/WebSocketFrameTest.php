@@ -54,3 +54,16 @@ it('decodes a close frame', function () {
 
     expect($decoded['opcode'])->toBe(WebSocketFrame::OPCODE_CLOSE);
 });
+
+it('returns null when a masked frame lacks its full mask key', function () {
+    // FIN+binary, masked, 7-bit length 5, but only 2 of 4 mask bytes present.
+    $partial = chr(0x82).chr(0x85).'ab';
+
+    expect(WebSocketFrame::decode($partial))->toBeNull();
+});
+
+it('returns null when a 64-bit length header is truncated', function () {
+    $partial = chr(0x82).chr(127).chr(0).chr(0);
+
+    expect(WebSocketFrame::decode($partial))->toBeNull();
+});

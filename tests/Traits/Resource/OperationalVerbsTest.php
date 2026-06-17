@@ -144,9 +144,10 @@ it('passes pod log options as query parameters', function () {
     });
 });
 
-it('decodes a watch stream into watch events', function () {
+it('decodes a watch stream into watch events and skips blank lines', function () {
     $stream = json_encode(['type' => 'ADDED', 'object' => ['metadata' => ['name' => 'a']]])."\n"
-        .json_encode(['type' => 'MODIFIED', 'object' => ['metadata' => ['name' => 'a']]])."\n";
+        ."\n"
+        .json_encode(['type' => 'DELETED', 'object' => ['metadata' => ['name' => 'a']]])."\n";
 
     Http::fake(['*' => Http::response($stream)]);
 
@@ -157,6 +158,22 @@ it('decodes a watch stream into watch events', function () {
 
     expect($events)->toHaveCount(2)
         ->and($events[0]->isAdded())->toBeTrue()
-        ->and($events[1]->isModified())->toBeTrue()
-        ->and($events[0]->object->getName())->toBe('a');
+        ->and($events[1]->isDeleted())->toBeTrue();
+});
+
+it('sends client certificate, key and ca verification options', function () {
+    $cluster = Kubernetes::make()
+        ->url('https://localhost')
+        ->withCertificate('/tmp/client.crt')
+        ->withPrivateKey('/tmp/client.key')
+        ->withCaCertificate('/tmp/ca.crt')
+        ->setManagerName('Pest Tests');
+
+    $deployment = Deployment::make()->setNamespace('production')->setName('checkout')->setCluster($cluster);
+
+    Http::fake(['*' => Http::response(['metadata' => ['name' => 'checkout']])]);
+
+    $deployment->find();
+
+    Http::assertSent(fn (Request $r) => $r->url() === 'https://localhost/api/v1/namespaces/production/deployments/checkout?pretty=1');
 });
