@@ -1,0 +1,37 @@
+name: integration-tests
+
+# Live integration suite. Runs the real CRUD/exec/listing matrix against a
+# local OrbStack cluster and is intentionally NOT wired to a hosted runner —
+# the default `run-tests` gate stays cluster-free. Trigger this manually only
+# on a self-hosted runner that has OrbStack and the `orbstack` kube context.
+on:
+  workflow_dispatch:
+
+jobs:
+  integration:
+    # No hosted runner has a Kubernetes apiserver; point this at a self-hosted
+    # runner with OrbStack before enabling. The IntegrationGuard hard-refuses
+    # any non-orbstack / non-loopback target, so this can never touch a
+    # production cluster even if mis-pointed.
+    runs-on: [self-hosted, orbstack]
+    if: ${{ false }} # safety: disabled until a self-hosted OrbStack runner exists
+
+    env:
+      K8S_INTEGRATION: '1'
+      K8S_INTEGRATION_CONTEXT: orbstack
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, fileinfo
+
+      - name: Install dependencies
+        run: composer update --prefer-stable --prefer-dist --no-interaction
+
+      - name: Run the live integration suite
+        run: composer test-integration
