@@ -29,6 +29,10 @@ it('uses namespaces', function () {
     expect(Deployment::make()->usesNamespaces())->toBeTrue();
 });
 
+it('belongs to the apps/v1 api group', function () {
+    expect(Deployment::make()->getVersion())->toBe('apps/v1');
+});
+
 it('sets update strategy', function () {
     $deployment = Deployment::make();
 

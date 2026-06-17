@@ -47,6 +47,15 @@ All notable changes to `kubernetes-api-for-laravel` will be documented in this f
 - `updateOrCreate()` now carries the server's current `resourceVersion` into the update,
   preventing lost updates from concurrent writes (surfacing a typed 409 instead).
 
+### Fixed
+
+- **`Deployment` now targets the correct `apps/v1` API group.** It previously inherited the
+  default `v1`, building the core-group path `/api/v1/namespaces/{ns}/deployments` and sending
+  `apiVersion: v1` — which 404s against a real cluster, because the core group has no
+  `deployments`. The resource now declares `apps/v1`, so it resolves
+  `/apis/apps/v1/namespaces/{ns}/deployments` and serialises `apiVersion: apps/v1`. No code
+  change is needed in consuming apps; remove any manual `->setVersion('apps/v1')` workaround.
+
 ### Deprecated
 
 - `getPlurarKind()` → use `getPluralKind()` (the misspelled alias is kept until the next major).

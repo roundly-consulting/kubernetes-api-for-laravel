@@ -53,14 +53,14 @@ it('uses custom guzzle options defined in config when making requests', function
     $this->resource->get();
 
     Http::assertSent(function (Request $request) {
-        return $request->url() === 'https://localhost/api/v1/namespaces/production/deployments?pretty=1' &&
+        return $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments?pretty=1' &&
                $request->method() === 'GET' &&
                $request->isJson() &&
                $request->hasHeader('Authorization', 'Bearer secret') &&
                $request->hasHeader('User-Agent', 'Pest Tests') &&
                $request->hasHeader('X-Foo', 'Testing') &&
                $request->data() === [
-                   'apiVersion' => 'v1',
+                   'apiVersion' => 'apps/v1',
                    'kind' => 'Deployment',
                    'metadata' => [
                        'namespace' => 'production',
@@ -96,13 +96,13 @@ it('makes get request to get all resources of type', function () {
         ->toBe('production');
 
     Http::assertSent(function (Request $request) {
-        return $request->url() === 'https://localhost/api/v1/namespaces/production/deployments?pretty=1' &&
+        return $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments?pretty=1' &&
                $request->method() === 'GET' &&
                $request->isJson() &&
                $request->hasHeader('Authorization', 'Bearer secret') &&
                $request->hasHeader('User-Agent', 'Pest Tests') &&
                $request->data() === [
-                   'apiVersion' => 'v1',
+                   'apiVersion' => 'apps/v1',
                    'kind' => 'Deployment',
                    'metadata' => [
                        'namespace' => 'production',
@@ -131,13 +131,13 @@ it('makes get request to find specific resource', function () {
         ->toBe('production');
 
     Http::assertSent(function (Request $request) {
-        return $request->url() === 'https://localhost/api/v1/namespaces/production/deployments/api-deployment?pretty=1' &&
+        return $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/api-deployment?pretty=1' &&
                $request->method() === 'GET' &&
                $request->isJson() &&
                $request->hasHeader('Authorization', 'Bearer secret') &&
                $request->hasHeader('User-Agent', 'Pest Tests') &&
                $request->data() === [
-                   'apiVersion' => 'v1',
+                   'apiVersion' => 'apps/v1',
                    'kind' => 'Deployment',
                    'metadata' => [
                        'namespace' => 'production',
@@ -169,13 +169,13 @@ it('makes get request to find specific resource existence', function () {
     expect($web)->toBeFalse();
 
     Http::assertSent(function (Request $request) {
-        return $request->url() === 'https://localhost/api/v1/namespaces/production/deployments/api-deployment?pretty=1' &&
+        return $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/api-deployment?pretty=1' &&
                $request->method() === 'GET' &&
                $request->isJson() &&
                $request->hasHeader('Authorization', 'Bearer secret') &&
                $request->hasHeader('User-Agent', 'Pest Tests') &&
                $request->data() === [
-                   'apiVersion' => 'v1',
+                   'apiVersion' => 'apps/v1',
                    'kind' => 'Deployment',
                    'metadata' => [
                        'namespace' => 'production',
@@ -185,13 +185,13 @@ it('makes get request to find specific resource existence', function () {
     });
 
     Http::assertSent(function (Request $request) {
-        return $request->url() === 'https://localhost/api/v1/namespaces/production/deployments/web-deployment?pretty=1' &&
+        return $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/web-deployment?pretty=1' &&
                $request->method() === 'GET' &&
                $request->isJson() &&
                $request->hasHeader('Authorization', 'Bearer secret') &&
                $request->hasHeader('User-Agent', 'Pest Tests') &&
                $request->data() === [
-                   'apiVersion' => 'v1',
+                   'apiVersion' => 'apps/v1',
                    'kind' => 'Deployment',
                    'metadata' => [
                        'namespace' => 'production',
@@ -233,13 +233,13 @@ it('makes post request to create specific resource', function () {
         ->toBe('production');
 
     Http::assertSent(function (Request $request) {
-        return $request->url() === 'https://localhost/api/v1/namespaces/production/deployments?pretty=1' &&
+        return $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments?pretty=1' &&
                $request->method() === 'POST' &&
                $request->isJson() &&
                $request->hasHeader('Authorization', 'Bearer secret') &&
                $request->hasHeader('User-Agent', 'Pest Tests') &&
                $request->data() === [
-                   'apiVersion' => 'v1',
+                   'apiVersion' => 'apps/v1',
                    'kind' => 'Deployment',
                    'metadata' => [
                        'namespace' => 'production',
@@ -274,13 +274,13 @@ it('makes put request to update specific resource', function () {
         ->toBe(2);
 
     Http::assertSent(function (Request $request) {
-        return $request->url() === 'https://localhost/api/v1/namespaces/production/deployments/api-deployment?pretty=1' &&
+        return $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/api-deployment?pretty=1' &&
                $request->method() === 'PUT' &&
                $request->isJson() &&
                $request->hasHeader('Authorization', 'Bearer secret') &&
                $request->hasHeader('User-Agent', 'Pest Tests') &&
                $request->data() === [
-                   'apiVersion' => 'v1',
+                   'apiVersion' => 'apps/v1',
                    'kind' => 'Deployment',
                    'metadata' => [
                        'namespace' => 'production',
@@ -315,7 +315,7 @@ it('makes delete request to delete specific resource', function () {
         ->toBeFalse();
 
     Http::assertSent(function (Request $request) {
-        return $request->url() === 'https://localhost/api/v1/namespaces/production/deployments/api-deployment?pretty=1' &&
+        return $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/api-deployment?pretty=1' &&
                $request->method() === 'DELETE' &&
                $request->isJson() &&
                $request->hasHeader('Authorization', 'Bearer secret') &&
@@ -344,10 +344,10 @@ it('updates or creates resource based on existence - create', function () {
         ->wasRecentlyCreated()->toBeTrue();
 
     Http::assertSent(fn (Request $request) => $request->method() === 'GET'
-        && $request->url() === 'https://localhost/api/v1/namespaces/production/deployments/api-deployment?pretty=1');
+        && $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/api-deployment?pretty=1');
 
     Http::assertSent(fn (Request $request) => $request->method() === 'POST'
-        && $request->url() === 'https://localhost/api/v1/namespaces/production/deployments?pretty=1');
+        && $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments?pretty=1');
 });
 
 it('updates or creates resource based on existence - update carries resourceVersion', function () {
@@ -372,7 +372,7 @@ it('updates or creates resource based on existence - update carries resourceVers
         ->wasRecentlyCreated()->toBeFalse();
 
     Http::assertSent(fn (Request $request) => $request->method() === 'PUT'
-        && $request->url() === 'https://localhost/api/v1/namespaces/production/deployments/api-deployment?pretty=1'
+        && $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/api-deployment?pretty=1'
         && $request->data()['metadata']['resourceVersion'] === '4242');
 });
 

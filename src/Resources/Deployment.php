@@ -24,6 +24,8 @@ class Deployment extends Resource
 
     protected string $kind = 'Deployment';
 
+    protected string $version = 'apps/v1';
+
     protected bool $usesNamespaces = true;
 
     public function setUpdateStrategy(string $strategy, string $maxUnavailable = '25%', string $maxSurge = '25%'): static
