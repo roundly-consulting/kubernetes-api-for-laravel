@@ -1,0 +1,74 @@
+{
+    "name": "roundly-consulting/kubernetes-api-for-laravel",
+    "description": "A fluent, Eloquent-style client for the Kubernetes API in Laravel.",
+    "keywords": [
+        "Roundly Consulting",
+        "laravel",
+        "kubernetes",
+        "kubernetes-api",
+        "traefik"
+    ],
+    "homepage": "https://github.com/roundly-consulting/kubernetes-api-for-laravel",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Andrej Mihaliak",
+            "email": "info@mihaliak.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.4",
+        "guzzlehttp/guzzle": "^7.8",
+        "illuminate/contracts": "^12.0|^13.0",
+        "acme/laravel-package-tools": "^1.16"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.0",
+        "nunomaduro/collision": "^8.0",
+        "orchestra/testbench": "^10.0|^11.0",
+        "pestphp/pest": "^3.0",
+        "pestphp/pest-plugin-arch": "^3.0",
+        "pestphp/pest-plugin-laravel": "^3.0",
+        "phpstan/extension-installer": "^1.4",
+        "phpstan/phpstan-deprecation-rules": "^2.0",
+        "phpstan/phpstan-phpunit": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "RoundlyConsulting\\KubernetesApi\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "RoundlyConsulting\\KubernetesApi\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": "@php ./vendor/bin/testbench package:discover --ansi",
+        "format": "vendor/bin/pint",
+        "analyse": "vendor/bin/phpstan analyse --no-progress",
+        "test": "vendor/bin/pest",
+        "test-coverage": "vendor/bin/pest --coverage --min=90"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "phpstan/extension-installer": true
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "RoundlyConsulting\\KubernetesApi\\KubernetesApiServiceProvider"
+            ],
+            "aliases": {
+                "Kubernetes": "RoundlyConsulting\\KubernetesApi\\Facades\\Kubernetes"
+            }
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
