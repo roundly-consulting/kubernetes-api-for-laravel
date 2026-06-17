@@ -4,30 +4,36 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi;
 
+use Illuminate\Support\ServiceProvider;
 use RoundlyConsulting\KubernetesApi\Commands\PingCommand;
 use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
-use Acme\LaravelPackageTools\Commands\InstallCommand;
-use Acme\LaravelPackageTools\Package;
-use Acme\LaravelPackageTools\PackageServiceProvider;
+use RoundlyConsulting\KubernetesApi\Resources\Resource;
 
-final class KubernetesApiServiceProvider extends PackageServiceProvider
+final class KubernetesApiServiceProvider extends ServiceProvider
 {
-    public function configurePackage(Package $package): void
+    public function register(): void
     {
-        $package
-            ->name('kubernetes')
-            ->hasConfigFile('kubernetes')
-            ->hasCommand(PingCommand::class)
-            ->hasInstallCommand(function (InstallCommand $command): void {
-                $command
-                    ->publishConfigFile()
-                    ->askToStarRepoOnGitHub('roundly-consulting/kubernetes-api-for-laravel');
-            });
+        $this->mergeConfigFrom(__DIR__.'/../config/kubernetes.php', 'kubernetes');
     }
 
-    public function packageRegistered(): void
+    public function boot(): void
     {
-        /** @var array<string, class-string<Resources\Resource>> $resources */
+        $this->registerConfiguredResources();
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                PingCommand::class,
+            ]);
+
+            $this->publishes([
+                __DIR__.'/../config/kubernetes.php' => config_path('kubernetes.php'),
+            ], 'kubernetes-config');
+        }
+    }
+
+    private function registerConfiguredResources(): void
+    {
+        /** @var array<string, class-string<resource>> $resources */
         $resources = config('kubernetes.resources', []);
 
         foreach ($resources as $name => $resourceClassName) {
