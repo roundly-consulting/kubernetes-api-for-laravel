@@ -11,11 +11,23 @@ class TraefikIngressRoute extends Resource
 {
     use HasSpec;
 
-    protected string $version = 'traefik.containo.us/v1alpha1';
+    protected string $version = 'traefik.io/v1alpha1';
 
     protected string $kind = 'IngressRoute';
 
     protected bool $usesNamespaces = true;
+
+    /** @param array<string, mixed> $attributes */
+    public function __construct(array $attributes = [])
+    {
+        parent::__construct($attributes);
+
+        $group = config('kubernetes.traefik.group');
+
+        if (is_string($group) && $group !== '') {
+            $this->version = $group;
+        }
+    }
 
     /** @param array<int, string> $entrypoints */
     public function setEntryPoints(array $entrypoints): static

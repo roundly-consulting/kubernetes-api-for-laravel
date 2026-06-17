@@ -5,34 +5,31 @@ declare(strict_types=1);
 namespace RoundlyConsulting\KubernetesApi\Resources;
 
 use RoundlyConsulting\KubernetesApi\Traits\Resource\CanRolloutRestart;
-use RoundlyConsulting\KubernetesApi\Traits\Resource\CanScale;
-use RoundlyConsulting\KubernetesApi\Traits\Resource\HasReplicas;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSelectors;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSpec;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasStatus;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasTemplate;
 
-class Deployment extends Resource
+class DaemonSet extends Resource
 {
     use CanRolloutRestart;
-    use CanScale;
-    use HasReplicas;
     use HasSelectors;
     use HasSpec;
     use HasStatus;
     use HasTemplate;
 
-    protected string $kind = 'Deployment';
+    protected string $kind = 'DaemonSet';
+
+    protected string $version = 'apps/v1';
 
     protected bool $usesNamespaces = true;
 
-    public function setUpdateStrategy(string $strategy, string $maxUnavailable = '25%', string $maxSurge = '25%'): static
+    public function setUpdateStrategy(string $strategy, string $maxUnavailable = '1'): static
     {
         $this->removeAttribute('spec.updateStrategy');
 
         if ($strategy === 'RollingUpdate') {
             $this->setSpec('updateStrategy.rollingUpdate.maxUnavailable', $maxUnavailable);
-            $this->setSpec('updateStrategy.rollingUpdate.maxSurge', $maxSurge);
         }
 
         return $this->setSpec('updateStrategy.type', $strategy);
@@ -42,22 +39,6 @@ class Deployment extends Resource
     public function getUpdateStrategy(): array
     {
         return $this->getSpec('updateStrategy', []);
-    }
-
-    /** @return array<int, array<string, mixed>> */
-    public function getConditions(): array
-    {
-        return $this->getStatus('conditions', []);
-    }
-
-    public function setMinReadySeconds(int $seconds): static
-    {
-        return $this->setSpec('minReadySeconds', $seconds);
-    }
-
-    public function getMinReadySeconds(): int
-    {
-        return (int) $this->getSpec('minReadySeconds', 0);
     }
 
     /** @return array<string, string> */
@@ -72,23 +53,23 @@ class Deployment extends Resource
         return $this->setSpec('selector.matchLabels', $selectors);
     }
 
-    public function getAvailableReplicasCount(): int
+    public function getDesiredNumberScheduled(): int
     {
-        return (int) $this->getStatus('availableReplicas', 0);
+        return (int) $this->getStatus('desiredNumberScheduled', 0);
     }
 
-    public function getReadyReplicasCount(): int
+    public function getCurrentNumberScheduled(): int
     {
-        return (int) $this->getStatus('readyReplicas', 0);
+        return (int) $this->getStatus('currentNumberScheduled', 0);
     }
 
-    public function getDesiredReplicasCount(): int
+    public function getNumberReady(): int
     {
-        return (int) $this->getStatus('replicas', 0);
+        return (int) $this->getStatus('numberReady', 0);
     }
 
-    public function getUnavailableReplicasCount(): int
+    public function getNumberAvailable(): int
     {
-        return (int) $this->getStatus('unavailableReplicas', 0);
+        return (int) $this->getStatus('numberAvailable', 0);
     }
 }

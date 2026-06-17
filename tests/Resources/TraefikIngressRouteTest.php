@@ -15,11 +15,17 @@ it('has correct kind', function () {
 });
 
 it('has correct version', function () {
-    expect(TraefikIngressRoute::make()->getVersion())->toBe('traefik.containo.us/v1alpha1');
+    expect(TraefikIngressRoute::make()->getVersion())->toBe('traefik.io/v1alpha1');
 });
 
 it('uses namespaces', function () {
     expect(TraefikIngressRoute::make()->usesNamespaces())->toBeTrue();
+});
+
+it('honours the configured traefik api group for back-compat', function () {
+    config()->set('kubernetes.traefik.group', 'traefik.containo.us/v1alpha1');
+
+    expect(TraefikIngressRoute::make()->getVersion())->toBe('traefik.containo.us/v1alpha1');
 });
 
 it('gets and sets entry points', function () {
@@ -44,7 +50,7 @@ it('gets and sets routes', function () {
 
     expect($ingressRoute->toArray())
         ->toBe([
-            'apiVersion' => 'traefik.containo.us/v1alpha1',
+            'apiVersion' => 'traefik.io/v1alpha1',
             'kind' => 'IngressRoute',
             'spec' => [
                 'routes' => [

@@ -14,11 +14,17 @@ it('has correct kind', function () {
 });
 
 it('has correct version', function () {
-    expect(TraefikMiddleware::make()->getVersion())->toBe('traefik.containo.us/v1alpha1');
+    expect(TraefikMiddleware::make()->getVersion())->toBe('traefik.io/v1alpha1');
 });
 
 it('uses namespaces', function () {
     expect(TraefikMiddleware::make()->usesNamespaces())->toBeTrue();
+});
+
+it('honours the configured traefik api group for back-compat', function () {
+    config()->set('kubernetes.traefik.group', 'traefik.containo.us/v1alpha1');
+
+    expect(TraefikMiddleware::make()->getVersion())->toBe('traefik.containo.us/v1alpha1');
 });
 
 it('sets redirect to scheme', function () {
@@ -28,7 +34,7 @@ it('sets redirect to scheme', function () {
         ->toBeInstanceOf(TraefikMiddleware::class)
         ->toArray()
         ->toBe([
-            'apiVersion' => 'traefik.containo.us/v1alpha1',
+            'apiVersion' => 'traefik.io/v1alpha1',
             'kind' => 'Middleware',
             'metadata' => [
                 'name' => 'redirects',
