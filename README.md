@@ -24,7 +24,13 @@ Install the package via Composer:
 composer require roundly-consulting/kubernetes-api-for-laravel
 ```
 
-Optionally publish the config file:
+Run the install command to publish the config and get next steps:
+
+```bash
+php artisan kubernetes:install
+```
+
+Or publish the config file directly:
 
 ```bash
 php artisan vendor:publish --tag="kubernetes-config"
@@ -46,17 +52,37 @@ return [
             'timeout' => 5,
         ],
     ],
+    'traefik' => [
+        'group' => 'traefik.io/v1alpha1',
+    ],
     'resources' => [
+        'clusterRoles' => Resources\ClusterRole::class,
+        'clusterRoleBindings' => Resources\ClusterRoleBinding::class,
         'configMaps' => Resources\ConfigMap::class,
+        'cronJobs' => Resources\CronJob::class,
+        'daemonSets' => Resources\DaemonSet::class,
         'deployments' => Resources\Deployment::class,
+        'endpoints' => Resources\Endpoints::class,
+        'events' => Resources\Event::class,
+        'horizontalPodAutoscalers' => Resources\HorizontalPodAutoscaler::class,
+        'ingresses' => Resources\Ingress::class,
         'jobs' => Resources\Job::class,
+        'limitRanges' => Resources\LimitRange::class,
         'namespaces' => Resources\Namespaces::class,
+        'networkPolicies' => Resources\NetworkPolicy::class,
         'nodes' => Resources\Node::class,
         'persistentVolumes' => Resources\PersistentVolume::class,
         'persistentVolumeClaims' => Resources\PersistentVolumeClaim::class,
         'pods' => Resources\Pod::class,
+        'replicaSets' => Resources\ReplicaSet::class,
+        'replicationControllers' => Resources\ReplicationController::class,
+        'resourceQuotas' => Resources\ResourceQuota::class,
+        'roles' => Resources\Role::class,
+        'roleBindings' => Resources\RoleBinding::class,
         'secrets' => Resources\Secret::class,
+        'serviceAccounts' => Resources\ServiceAccount::class,
         'services' => Resources\Service::class,
+        'statefulSets' => Resources\StatefulSet::class,
         'storageClasses' => Resources\StorageClass::class,
         'traefikIngressRoutes' => Resources\TraefikIngressRoute::class,
         'traefikMiddlewares' => Resources\TraefikMiddleware::class,
@@ -67,7 +93,14 @@ return [
 | Key | Type | Default | Purpose |
 |---|---|---|---|
 | `client.options` | `array<string, mixed>` | `['timeout' => 5]` | Guzzle/HTTP client options merged into every request the package sends (timeout, proxy, etc.). |
-| `resources` | `array<string, class-string>` | the core + Traefik resources above | Maps an accessor name (e.g. `deployments`) to the resource class that backs it. Each entry becomes a magic method on a cluster (`$cluster->deployments()`). Add your own CRDs here to register them globally. |
+| `traefik.group` | `string` | `traefik.io/v1alpha1` | The API group/version the bundled Traefik resources target. Set it to `traefik.containo.us/v1alpha1` for Traefik installations older than v3. |
+| `resources` | `array<string, class-string>` | the core, workload, RBAC, policy + Traefik resources above | Maps an accessor name (e.g. `deployments`) to the resource class that backs it. Each entry becomes a method/magic method on a cluster (`$cluster->deployments()`). Add your own CRDs here to register them globally. |
+
+The built-in accessors cover config maps, secrets, pods, deployments, replica sets, stateful
+sets, daemon sets, replication controllers, jobs, cron jobs, services, endpoints, ingresses,
+namespaces, nodes, events, persistent volumes and claims, storage classes, RBAC
+(roles/role bindings/cluster roles/cluster role bindings/service accounts), network policies,
+horizontal pod autoscalers, resource quotas, limit ranges, and the Traefik CRDs.
 
 The package works with zero configuration — clusters are defined in code (see below) and the
 default `resources` map ships built in.
@@ -95,6 +128,27 @@ recommended for production):
 $cluster = Kubernetes::url('https://127.0.0.1:6443')
     ->withToken('token')
     ->withoutSslVerification();
+```
+
+### From a kubeconfig or in-cluster
+
+Point the client at a cluster in one line instead of hand-wiring the URL and credentials.
+`fromKubeConfig()` parses the kubeconfig, resolves the named context's cluster and user, and
+materialises any inline certificate data to temp files. `inCluster()` reads the
+service-account credentials mounted into a pod.
+
+```php
+use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
+
+// Current context from the default kubeconfig (or the KUBECONFIG env path):
+$cluster = Kubernetes::fromKubeConfig();
+
+// A specific context, optionally from an explicit kubeconfig path:
+$cluster = Kubernetes::fromKubeConfig(context: 'orbstack');
+$cluster = Kubernetes::fromKubeConfig(path: '/path/to/kubeconfig', context: 'staging');
+
+// From in-cluster service-account mounts (when running inside a pod):
+$cluster = Kubernetes::inCluster()->setManagerName('my-app');
 ```
 
 ### Registering named clusters
@@ -191,6 +245,105 @@ $deleted = $cluster->deployments()->withName('checkout')->delete();
 $deleted->exists(); // false
 ```
 
+`updateOrCreate()` carries the server's current `resourceVersion` into the update so a
+concurrent change surfaces as a typed 409 conflict instead of being silently clobbered.
+
+### Listing with selectors and pagination
+
+Push filtering to the apiserver with label/field selectors, and paginate large lists instead
+of fetching everything at once:
+
+```php
+// Label and field selectors build the labelSelector / fieldSelector query params.
+$pods = $cluster->pods()
+    ->whereLabel('app', 'checkout')
+    ->whereLabelIn('tier', ['web', 'api'])
+    ->whereLabelExists('team')
+    ->whereField('status.phase', 'Running')
+    ->limit(100)
+    ->get();
+
+// List across every namespace.
+$all = $cluster->pods()->allNamespaces()->get();
+
+// Page explicitly with a continue token.
+$page = $cluster->pods()->limit(50)->getPage();
+$page->items;               // ResourcesCollection
+$page->continue;            // ?string — pass to ->continueFrom(...) for the next page
+$page->remainingItemCount;  // ?int
+
+// Or iterate every item lazily, auto-following continue tokens.
+$cluster->pods()->each(function ($pod): void {
+    // ...
+});
+```
+
+### Patch, scale, rollout, and dry-run
+
+```php
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubernetesPatch;
+
+// Targeted patches (strategic-merge / merge / JSON Patch / server-side apply).
+$cluster->deployments()->withName('checkout')
+    ->patch(KubernetesPatch::merge(['spec' => ['paused' => true]]));
+
+// Scale via the /scale subresource.
+$cluster->deployments()->withName('checkout')->scale(5);
+
+// Roll the pods by stamping the restartedAt annotation (like `kubectl rollout restart`).
+$cluster->deployments()->withName('checkout')->rolloutRestart();
+
+// Validate a write without persisting it by appending ?dryRun=All.
+$cluster->deployments()->withName('checkout')->dryRun()->scale(5);
+```
+
+`scale()` is available on deployments, replica sets, stateful sets, and replication
+controllers; `rolloutRestart()` on deployments, stateful sets, and daemon sets.
+
+### Watching for changes
+
+```php
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\WatchEvent;
+
+$cluster->pods()->whereLabel('app', 'checkout')->watch(function (WatchEvent $event): void {
+    $event->type;           // ADDED / MODIFIED / DELETED
+    $event->object;         // the Pod resource
+});
+```
+
+Long-lived watches suit queued or console contexts rather than web requests.
+
+### Pod logs and exec
+
+```php
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\PodLogOptions;
+
+// Fetch logs as a string.
+$logs = $cluster->pods()->withName('api')->logs(
+    new PodLogOptions(container: 'app', tailLines: 200, timestamps: true),
+);
+
+// Stream logs line by line (tail).
+foreach ($cluster->pods()->withName('api')->streamLogs(new PodLogOptions(follow: true)) as $line) {
+    echo $line . PHP_EOL;
+}
+
+// Exec a command inside a pod (over a WebSocket; returns stdout, stderr, and exit code).
+$result = $cluster->pods()->withName('api')->exec(['sh', '-c', 'echo hi']);
+$result->stdout;     // "hi\n"
+$result->exitCode;   // 0
+$result->successful();
+```
+
+### Diagnostics command
+
+Verify connectivity to a registered cluster:
+
+```bash
+php artisan kubernetes:ping production
+# Connected to production — server v1.34.0
+```
+
 ### Building resources with value objects
 
 Resources compose from typed value objects such as `Container`, `Port`, `Probe`, `Volume`,
@@ -260,9 +413,31 @@ try {
 
 ## Testing
 
+The default suite is fully faked with `Http::fake()` and needs no cluster:
+
 ```bash
 composer test
 ```
+
+### Live integration tests (optional)
+
+A separate, opt-in suite runs the real CRUD / exec / listing matrix against a local
+**OrbStack** cluster. It is excluded from `composer test` and guarded so it can only ever run
+against OrbStack — never a production context.
+
+```bash
+K8S_INTEGRATION=1 composer test-integration
+```
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `K8S_INTEGRATION` | _(unset)_ | Set to `1` to enable the suite; absent → every integration test skips. |
+| `K8S_INTEGRATION_CONTEXT` | `orbstack` | The kube context to extract credentials from. Must be `orbstack`. |
+| `K8S_INTEGRATION_NAMESPACE` | random `k8s-it-…` | Override the throwaway namespace the suite creates and cleans up. |
+
+The guard hard-refuses to run unless `K8S_INTEGRATION=1`, the active context is exactly
+`orbstack`, and the apiserver host is loopback or `*.orb.local`. Each run is isolated to a
+unique throwaway namespace that is deleted afterwards. See `tests/Integration/README.md`.
 
 ## Changelog
 
