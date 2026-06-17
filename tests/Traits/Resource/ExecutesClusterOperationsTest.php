@@ -32,7 +32,7 @@ it('uses required traits', function () {
     ]);
 });
 
-it('uses custom guzzle options defined in config when making requests', function () {
+it('uses custom http client options defined in config when making requests', function () {
     Http::fake([
         '*' => Http::response([
             'items' => [

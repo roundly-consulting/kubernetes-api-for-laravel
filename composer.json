@@ -19,9 +19,7 @@
     ],
     "require": {
         "php": "^8.4",
-        "guzzlehttp/guzzle": "^7.8",
         "illuminate/contracts": "^12.0|^13.0",
-        "acme/laravel-package-tools": "^1.16",
         "symfony/yaml": "^7.0|^8.0"
     },
     "require-dev": {
