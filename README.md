@@ -24,13 +24,7 @@ Install the package via Composer:
 composer require roundly-consulting/kubernetes-api-for-laravel
 ```
 
-Run the install command to publish the config and get next steps:
-
-```bash
-php artisan kubernetes:install
-```
-
-Or publish the config file directly:
+Optionally publish the config file:
 
 ```bash
 php artisan vendor:publish --tag="kubernetes-config"
@@ -95,7 +89,7 @@ return [
 
 | Key | Type | Default | Purpose |
 |---|---|---|---|
-| `client.options` | `array<string, mixed>` | `['timeout' => 5]` | Guzzle/HTTP client options merged into every request the package sends (timeout, proxy, etc.). |
+| `client.options` | `array<string, mixed>` | `['timeout' => 5]` | Laravel HTTP client options merged into every request the package sends (timeout, proxy, etc.). |
 | `traefik.group` | `string` | `traefik.io/v1alpha1` | The API group/version the bundled Traefik resources target. Set it to `traefik.containo.us/v1alpha1` for Traefik installations older than v3. |
 | `resources` | `array<string, class-string>` | the core, workload, RBAC, policy + Traefik resources above | Maps an accessor name (e.g. `deployments`) to the resource class that backs it. Each entry becomes a method/magic method on a cluster (`$cluster->deployments()`). Add your own CRDs here to register them globally. |
 
