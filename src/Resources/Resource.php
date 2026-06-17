@@ -16,6 +16,7 @@ use RoundlyConsulting\KubernetesApi\Traits\Resource\HasClusterPaths;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasExistence;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasKind;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasLabels;
+use RoundlyConsulting\KubernetesApi\Traits\Resource\HasListing;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasName;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasNamespace;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasVersion;
@@ -36,6 +37,7 @@ class Resource implements Arrayable, Jsonable
     use HasExistence;
     use HasKind;
     use HasLabels;
+    use HasListing;
     use HasName;
     use HasNamespace;
     use HasVersion;

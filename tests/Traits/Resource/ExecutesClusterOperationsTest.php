@@ -329,17 +329,57 @@ it('makes delete request to delete specific resource', function () {
 });
 
 it('updates or creates resource based on existence - create', function () {
-    $mock = $this->partialMock(Deployment::class);
-    $mock->expects('existsOnCluster')->once()->andReturn(false);
-    $mock->expects('create')->once()->andReturn($this->resource);
+    Http::fake([
+        '*' => Http::sequence()
+            ->push(['message' => 'Resource not found'], 404)
+            ->push([
+                'metadata' => ['name' => 'api-deployment', 'namespace' => 'production'],
+            ]),
+    ]);
 
-    $mock->withName('api-deployment')->updateOrCreate();
+    $result = $this->resource->setName('api-deployment')->updateOrCreate();
+
+    expect($result)
+        ->toBeInstanceOf(Deployment::class)
+        ->wasRecentlyCreated()->toBeTrue();
+
+    Http::assertSent(fn (Request $request) => $request->method() === 'GET'
+        && $request->url() === 'https://localhost/api/v1/namespaces/production/deployments/api-deployment?pretty=1');
+
+    Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+        && $request->url() === 'https://localhost/api/v1/namespaces/production/deployments?pretty=1');
 });
 
-it('updates or creates resource based on existence - update', function () {
-    $mock = $this->partialMock(Deployment::class);
-    $mock->expects('existsOnCluster')->once()->andReturn(true);
-    $mock->expects('update')->once()->andReturn($this->resource);
+it('updates or creates resource based on existence - update carries resourceVersion', function () {
+    Http::fake([
+        '*' => Http::sequence()
+            ->push([
+                'metadata' => [
+                    'name' => 'api-deployment',
+                    'namespace' => 'production',
+                    'resourceVersion' => '4242',
+                ],
+            ])
+            ->push([
+                'metadata' => ['name' => 'api-deployment', 'namespace' => 'production'],
+            ]),
+    ]);
 
-    $mock->withName('api-deployment')->updateOrCreate();
+    $result = $this->resource->setName('api-deployment')->setReplicas(3)->updateOrCreate();
+
+    expect($result)
+        ->toBeInstanceOf(Deployment::class)
+        ->wasRecentlyCreated()->toBeFalse();
+
+    Http::assertSent(fn (Request $request) => $request->method() === 'PUT'
+        && $request->url() === 'https://localhost/api/v1/namespaces/production/deployments/api-deployment?pretty=1'
+        && $request->data()['metadata']['resourceVersion'] === '4242');
 });
+
+it('updates or creates rethrows non-404 errors from the existence check', function () {
+    Http::fake([
+        '*' => Http::response(['message' => 'Server Error'], 500),
+    ]);
+
+    $this->resource->setName('api-deployment')->updateOrCreate();
+})->throws(KubernetesException::class, 'Server Error');
