@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Resources;
 
+use Generator;
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\PodLogOptions;
 use RoundlyConsulting\KubernetesApi\Resources\Types\Container;
 use RoundlyConsulting\KubernetesApi\Resources\Types\ContainerStatus;
 use RoundlyConsulting\KubernetesApi\Resources\Types\Volume;
+use RoundlyConsulting\KubernetesApi\Traits\Resource\CanExec;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSpec;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasStatus;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasStatusPhase;
 
 class Pod extends Resource
 {
+    use CanExec;
     use HasSpec;
     use HasStatus;
     use HasStatusPhase;
@@ -20,6 +24,58 @@ class Pod extends Resource
     protected string $kind = 'Pod';
 
     protected bool $usesNamespaces = true;
+
+    /**
+     * Fetch the pod's logs from the `/log` subresource as a single string.
+     */
+    public function logs(?PodLogOptions $options = null): string
+    {
+        $options ??= new PodLogOptions;
+
+        $response = $this->request(
+            method: 'GET',
+            path: $this->getSubresourcePath('log'),
+            query: $options->toQuery(),
+            payload: '',
+        );
+
+        return $response->body();
+    }
+
+    /**
+     * Stream the pod's logs line by line. Pair with `follow: true` to tail a
+     * running container; the generator yields each log line as it arrives.
+     *
+     * @return Generator<int, string>
+     */
+    public function streamLogs(?PodLogOptions $options = null): Generator
+    {
+        $options ??= new PodLogOptions(follow: true);
+
+        $response = $this->request(
+            method: 'GET',
+            path: $this->getSubresourcePath('log'),
+            query: $options->toQuery(),
+            payload: '',
+            stream: true,
+        );
+
+        $body = $response->toPsrResponse()->getBody();
+        $buffer = '';
+
+        while (! $body->eof()) {
+            $buffer .= $body->read(8192);
+
+            while (($newline = strpos($buffer, "\n")) !== false) {
+                yield substr($buffer, 0, $newline);
+                $buffer = substr($buffer, $newline + 1);
+            }
+        }
+
+        if ($buffer !== '') {
+            yield $buffer;
+        }
+    }
 
     /** @param array<int, Container> $containers */
     public function setContainers(array $containers = []): static
