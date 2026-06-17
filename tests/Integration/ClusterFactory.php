@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Tests\Integration;
 
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
 use RoundlyConsulting\KubernetesApi\Kubernetes;
+use RoundlyConsulting\KubernetesApi\Resources\Namespaces;
 use RoundlyConsulting\KubernetesApi\Support\IntegrationGuard;
 use RuntimeException;
+use Throwable;
 
 /**
  * Builds a {@see Kubernetes} client pointed at the local OrbStack cluster for
@@ -77,6 +81,89 @@ final class ClusterFactory
         }
 
         return self::RANDOM_NS_PREFIX.bin2hex(random_bytes(4));
+    }
+
+    /**
+     * Create a fresh throwaway namespace and block until it is Active, so
+     * dependent objects can be created in it without races.
+     */
+    public static function createNamespace(Kubernetes $cluster, string $namespace): void
+    {
+        Namespaces::make()->setCluster($cluster)->setName($namespace)->updateOrCreate();
+
+        retry(20, function () use ($cluster, $namespace): void {
+            $ns = Namespaces::make()->setCluster($cluster)->setName($namespace)->find();
+            throw_unless($ns->isActive(), new RuntimeException('namespace not active'));
+        }, 250);
+    }
+
+    /**
+     * Best-effort deletion of a throwaway namespace; never throws so it is safe
+     * in an afterEach even when the test already failed.
+     */
+    public static function deleteNamespace(Kubernetes $cluster, string $namespace): void
+    {
+        try {
+            Namespaces::make()->setCluster($cluster)->setName($namespace)->delete();
+        } catch (Throwable) {
+            // best-effort cleanup
+        }
+    }
+
+    /**
+     * Issue an authenticated raw GET against the cluster, reusing the pinned
+     * OrbStack credentials. Used for read-only discovery endpoints (`/version`,
+     * `/apis`) and CRD presence checks that no typed resource covers.
+     */
+    public static function rawGet(Kubernetes $cluster, string $path): Response
+    {
+        $request = Http::baseUrl($cluster->getUrl())->withUserAgent((string) $cluster->getManagerName());
+
+        if ($cluster->shouldVerify()) {
+            $request->withOptions([
+                'verify' => $cluster->hasPathToCaCertificate() ? $cluster->getPathToCaCertificate() : true,
+            ]);
+        } else {
+            $request->withoutVerifying();
+        }
+
+        if ($cluster->hasToken()) {
+            $request->withToken((string) $cluster->getToken());
+        }
+
+        if ($cluster->hasPathToCertificate()) {
+            $request->withOptions(['cert' => $cluster->getPathToCertificate()]);
+        }
+
+        if ($cluster->hasPathToPrivateKey()) {
+            $request->withOptions(['ssl_key' => $cluster->getPathToPrivateKey()]);
+        }
+
+        return $request->get($path);
+    }
+
+    /**
+     * Whether the cluster serves the given API group (e.g. `traefik.io`). Used
+     * to skip CRD-dependent cases on clusters that don't ship them.
+     */
+    public static function hasApiGroup(Kubernetes $cluster, string $group): bool
+    {
+        $response = self::rawGet($cluster, '/apis');
+
+        if ($response->failed()) {
+            return false;
+        }
+
+        /** @var list<array<string, mixed>> $groups */
+        $groups = (array) $response->json('groups', []);
+
+        foreach ($groups as $entry) {
+            if (($entry['name'] ?? null) === $group) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static function cleanup(): void

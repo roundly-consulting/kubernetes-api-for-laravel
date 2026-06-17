@@ -5,7 +5,6 @@ declare(strict_types=1);
 use RoundlyConsulting\KubernetesApi\Exceptions\KubernetesException;
 use RoundlyConsulting\KubernetesApi\Resources\ConfigMap;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
-use RoundlyConsulting\KubernetesApi\Resources\Namespaces;
 use RoundlyConsulting\KubernetesApi\Resources\Pod;
 use RoundlyConsulting\KubernetesApi\Resources\Secret;
 use RoundlyConsulting\KubernetesApi\Resources\Types\Container;
@@ -21,22 +20,12 @@ beforeEach(function () {
     $this->cluster = ClusterFactory::make();
     $this->ns = ClusterFactory::namespace();
 
-    Namespaces::make()->setCluster($this->cluster)->setName($this->ns)->updateOrCreate();
-
-    // Wait for the namespace to become active.
-    retry(20, function (): void {
-        $ns = Namespaces::make()->setCluster($this->cluster)->setName($this->ns)->find();
-        throw_unless($ns->isActive(), new RuntimeException('namespace not active'));
-    }, 250);
+    ClusterFactory::createNamespace($this->cluster, $this->ns);
 });
 
 afterEach(function () {
     if (isset($this->cluster, $this->ns)) {
-        try {
-            Namespaces::make()->setCluster($this->cluster)->setName($this->ns)->delete();
-        } catch (Throwable) {
-            // best-effort cleanup
-        }
+        ClusterFactory::deleteNamespace($this->cluster, $this->ns);
     }
 
     ClusterFactory::cleanup();
@@ -95,10 +84,35 @@ it('runs a pod to completion and execs a command in it', function () {
     expect($failure->exitCode)->toBe(7);
 });
 
+it('reads logs from a running pod', function () {
+    $pod = Pod::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('log-pod')
+        ->setContainers([
+            Container::make()->setName('main')->setImage('busybox')
+                ->setCommand(['sh', '-c', 'echo hello-from-logs; sleep 300']),
+        ]);
+
+    $pod->create();
+
+    retry(40, function (): void {
+        $current = Pod::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('log-pod')->find();
+        throw_unless($current->isRunning(), new RuntimeException('pod not running'));
+    }, 500);
+
+    retry(20, function (): void {
+        $logs = Pod::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('log-pod')->logs();
+        throw_unless(str_contains($logs, 'hello-from-logs'), new RuntimeException('logs not ready'));
+    }, 500);
+
+    $logs = Pod::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('log-pod')->logs();
+
+    expect($logs)->toContain('hello-from-logs');
+});
+
 it('scales and rollout-restarts a deployment', function () {
-    // Real Deployments live under the apps/v1 group; set it explicitly.
+    // The Deployment resource now defaults to the apps/v1 group on its own; a
+    // live round-trip here is the proof of the apiVersion fix (no override).
     $newDeployment = fn (): Deployment => Deployment::make()
-        ->setCluster($this->cluster)->setNamespace($this->ns)->setVersion('apps/v1')->setName('web');
+        ->setCluster($this->cluster)->setNamespace($this->ns)->setName('web');
 
     $newDeployment()
         ->setReplicas(1)
