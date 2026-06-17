@@ -47,4 +47,34 @@ class Secret extends Resource
     {
         return $this->removeAttribute("data.{$name}");
     }
+
+    public function setType(string $type): static
+    {
+        return $this->setAttribute('type', $type);
+    }
+
+    public function getType(): ?string
+    {
+        $type = $this->getAttribute('type');
+
+        return is_string($type) ? $type : null;
+    }
+
+    /**
+     * Build a `kubernetes.io/tls` Secret from a PEM-encoded certificate and
+     * private key. The PEM blocks are base64-encoded into `data['tls.crt']` and
+     * `data['tls.key']` as the apiserver expects.
+     */
+    public function asTlsCertificate(string $certificate, #[\SensitiveParameter] string $privateKey): static
+    {
+        // `tls.crt` / `tls.key` are literal Secret data keys (with a dot), so
+        // they must not be treated as a nested `data.tls.crt` path.
+        $this->setType('kubernetes.io/tls');
+
+        $data = (array) $this->getAttribute('data', []);
+        $data['tls.crt'] = base64_encode($certificate);
+        $data['tls.key'] = base64_encode($privateKey);
+
+        return $this->setAttribute('data', $data);
+    }
 }

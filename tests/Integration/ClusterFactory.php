@@ -166,6 +166,42 @@ final class ClusterFactory
         return false;
     }
 
+    /**
+     * Generate a throwaway self-signed certificate + private key (PEM) for TLS
+     * Secret / TLSStore integration cases. Nothing is committed; the material
+     * lives only for the duration of the test run.
+     *
+     * @return array{cert: string, key: string}
+     */
+    public static function selfSignedCertificate(string $commonName = 'integration.test'): array
+    {
+        $privateKey = openssl_pkey_new([
+            'private_key_bits' => 2048,
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+        ]);
+
+        if ($privateKey === false) {
+            throw new RuntimeException('Unable to generate a private key for the TLS integration fixture.');
+        }
+
+        $csr = openssl_csr_new(['commonName' => $commonName], $privateKey);
+
+        if ($csr === false) {
+            throw new RuntimeException('Unable to generate a CSR for the TLS integration fixture.');
+        }
+
+        $signed = openssl_csr_sign($csr, null, $privateKey, 1);
+
+        if ($signed === false) {
+            throw new RuntimeException('Unable to self-sign the TLS integration fixture.');
+        }
+
+        openssl_x509_export($signed, $certPem);
+        openssl_pkey_export($privateKey, $keyPem);
+
+        return ['cert' => (string) $certPem, 'key' => (string) $keyPem];
+    }
+
     public static function cleanup(): void
     {
         foreach (self::$tempFiles as $file) {

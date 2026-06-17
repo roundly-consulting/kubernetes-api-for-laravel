@@ -66,3 +66,37 @@ it('removes from data', function () {
 
     expect($secret->getData('age'))->toBeNull();
 });
+
+it('returns null type by default and round-trips a set type', function () {
+    expect(Secret::make()->getType())->toBeNull();
+
+    $secret = Secret::make()->setType('Opaque');
+
+    expect($secret->getType())->toBe('Opaque')
+        ->and($secret->getAttribute('type'))->toBe('Opaque');
+});
+
+it('builds a kubernetes.io/tls secret from a cert and key', function () {
+    $cert = "-----BEGIN CERTIFICATE-----\nMIICert\n-----END CERTIFICATE-----\n";
+    $key = "-----BEGIN PRIVATE KEY-----\nMIIKey\n-----END PRIVATE KEY-----\n";
+
+    $secret = Secret::make()->setName('tls')->asTlsCertificate($cert, $key);
+
+    expect($secret->getType())->toBe('kubernetes.io/tls');
+
+    // tls.crt / tls.key are literal data keys (with a dot), not a nested path.
+    expect($secret->getAttribute('data'))
+        ->toBe([
+            'tls.crt' => base64_encode($cert),
+            'tls.key' => base64_encode($key),
+        ]);
+
+    // The base64 round-trips back to the original PEM through getData().
+    expect($secret->getData())
+        ->toBe([
+            'tls.crt' => $cert,
+            'tls.key' => $key,
+        ])
+        ->and($secret->getData('tls.crt'))->toBe($cert)
+        ->and($secret->getData('tls.key'))->toBe($key);
+});

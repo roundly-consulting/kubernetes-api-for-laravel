@@ -58,6 +58,23 @@ it('round-trips a secret with base64 data', function () {
     expect($found->getData()['token'])->toBe('super-secret');
 });
 
+it('creates, reads and deletes a kubernetes.io/tls secret', function () {
+    ['cert' => $cert, 'key' => $key] = ClusterFactory::selfSignedCertificate('tls.integration.test');
+
+    $secret = Secret::make()->setCluster($this->cluster)->setNamespace($this->ns)
+        ->setName('tls-cert')->asTlsCertificate($cert, $key);
+
+    expect($secret->create()->wasRecentlyCreated())->toBeTrue();
+
+    $found = Secret::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('tls-cert')->find();
+
+    expect($found->getType())->toBe('kubernetes.io/tls')
+        ->and($found->getData('tls.crt'))->toBe($cert)
+        ->and($found->getData('tls.key'))->toBe($key);
+
+    $found->delete();
+});
+
 it('runs a pod to completion and execs a command in it', function () {
     $pod = Pod::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('exec-pod')
         ->setContainers([
