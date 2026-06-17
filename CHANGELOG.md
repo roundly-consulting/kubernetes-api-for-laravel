@@ -55,6 +55,14 @@ All notable changes to `kubernetes-api-for-laravel` will be documented in this f
   `deployments`. The resource now declares `apps/v1`, so it resolves
   `/apis/apps/v1/namespaces/{ns}/deployments` and serialises `apiVersion: apps/v1`. No code
   change is needed in consuming apps; remove any manual `->setVersion('apps/v1')` workaround.
+- **`TraefikMiddleware` now resolves the correct `middlewares` REST path.** "Middleware" is
+  uncountable, so the naive pluraliser left it unchanged and built
+  `/apis/traefik.io/v1alpha1/namespaces/{ns}/middleware` — a 404 against a real cluster. The
+  resource now declares the explicit plural `middlewares`, matching the CRD. No code change is
+  needed in consuming apps.
+- **Traefik resources are now covered by the live integration suite.** `IngressRoute` and
+  `Middleware` create/read/delete against a real Traefik v3 install on the OrbStack cluster,
+  using a valid `services` reference on each route as the CRD requires.
 
 ### Deprecated
 

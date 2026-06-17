@@ -23,6 +23,25 @@ failure). The user's global kube context is never switched — every call pins `
 K8S_INTEGRATION=1 composer test-integration
 ```
 
+## Traefik CRDs
+
+The Traefik cases in `TraefikResourcesTest` (`IngressRoute`, `Middleware`) run **only** when
+the Traefik CRDs (`traefik.io` API group) are installed on the cluster; otherwise they skip
+gracefully via `ClusterFactory::hasApiGroup($cluster, 'traefik.io')`. Install Traefik on the
+local OrbStack cluster with Helm to make them run:
+
+```bash
+helm repo add traefik https://traefik.github.io/charts
+helm repo update
+helm install traefik traefik/traefik \
+  --namespace traefik --create-namespace \
+  --kube-context orbstack --wait
+```
+
+This installs the `ingressroutes.traefik.io` and `middlewares.traefik.io` CRDs (group
+`traefik.io/v1alpha1`) and the Traefik controller. The package ships no first-class resource
+for the standalone `TraefikService` CRD, so that case is intentionally skipped.
+
 ## Environment variables
 
 | Variable | Default | Purpose |
