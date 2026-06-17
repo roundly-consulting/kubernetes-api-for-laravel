@@ -63,12 +63,19 @@ it('returns pod counts from status with defaults', function () {
     expect($job)
         ->getActivePodsCount()->toBe(2)
         ->getFailedPodsCount()->toBe(1)
-        ->getSuccededPodsCount()->toBe(5);
+        ->getSucceededPodsCount()->toBe(5);
 
     expect(Job::make())
         ->getActivePodsCount()->toBe(0)
         ->getFailedPodsCount()->toBe(0)
-        ->getSuccededPodsCount()->toBe(0);
+        ->getSucceededPodsCount()->toBe(0);
+});
+
+it('keeps the misspelled getSuccededPodsCount alias for back-compat', function () {
+    $job = Job::make(['status' => ['succeeded' => 7]]);
+
+    expect($job->getSuccededPodsCount())->toBe(7)
+        ->and($job->getSucceededPodsCount())->toBe(7);
 });
 
 it('returns start and completion times as carbon instances', function () {

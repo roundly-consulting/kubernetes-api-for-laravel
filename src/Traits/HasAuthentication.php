@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Traits;
 
+use SensitiveParameter;
+
 trait HasAuthentication
 {
     protected ?string $token = null;
@@ -61,7 +63,7 @@ trait HasAuthentication
         return $this->verify;
     }
 
-    public function withToken(?string $token): self
+    public function withToken(#[SensitiveParameter] ?string $token): self
     {
         $this->token = $token;
 
