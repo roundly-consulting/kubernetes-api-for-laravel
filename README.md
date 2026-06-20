@@ -1,3 +1,11 @@
+<!-- roundly-hero:start -->
+<p align="center">
+  <a href="https://roundly-consulting.com/open-source/docs/kubernetes-api-for-laravel?utm_source=github&utm_medium=readme&utm_campaign=open-source&utm_content=kubernetes-api-for-laravel">
+    <img src="art/hero.png" alt="Kubernetes API for Laravel — Roundly open source" width="100%">
+  </a>
+</p>
+<!-- roundly-hero:end -->
+
 # Kubernetes API for Laravel
 
 A fluent, Eloquent-style client for the Kubernetes API in Laravel. Talk to one or many
