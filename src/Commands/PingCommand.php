@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace RoundlyConsulting\KubernetesApi\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use RoundlyConsulting\KubernetesApi\Concerns\InteractsWithRateLimits;
 use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
 use Throwable;
 
 final class PingCommand extends Command
 {
+    use InteractsWithRateLimits;
+
     protected $signature = 'kubernetes:ping {cluster? : The registered cluster name to ping}';
 
     protected $description = 'Check connectivity to a Kubernetes cluster by calling its /version endpoint';
@@ -36,7 +40,7 @@ final class PingCommand extends Command
         }
 
         try {
-            $request = Http::baseUrl($cluster->getUrl())->throw();
+            $request = Http::baseUrl($cluster->getUrl());
 
             if ($cluster->shouldVerify()) {
                 $request->withOptions([
@@ -58,7 +62,11 @@ final class PingCommand extends Command
                 $request->withOptions(['ssl_key' => $cluster->getPathToPrivateKey()]);
             }
 
-            $version = $request->get('/version')->json('gitVersion');
+            // Route the probe through the same per-cluster limiter as resource
+            // operations so the ping counts against the cluster budget.
+            $response = $this->throttled($cluster, fn (): Response => $request->get('/version'))->throw();
+
+            $version = $response->json('gitVersion');
         } catch (Throwable $e) {
             $this->components->error("Could not reach {$cluster->getUrl()}: {$e->getMessage()}");
 
