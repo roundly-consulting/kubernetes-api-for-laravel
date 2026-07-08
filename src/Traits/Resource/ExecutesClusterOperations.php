@@ -6,9 +6,9 @@ namespace RoundlyConsulting\KubernetesApi\Traits\Resource;
 
 use Generator;
 use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use RoundlyConsulting\KubernetesApi\Concerns\InteractsWithRateLimits;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubernetesPatch;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\ResourcePage;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\WatchEvent;
@@ -22,6 +22,7 @@ trait ExecutesClusterOperations
     use HasCluster;
     use HasClusterPaths;
     use HasListing;
+    use InteractsWithRateLimits;
 
     protected bool $dryRun = false;
 
@@ -320,37 +321,45 @@ trait ExecutesClusterOperations
         ?string $contentType = null,
         bool $stream = false,
     ): Response {
-        try {
-            $cluster = $this->getCluster();
+        $cluster = $this->getCluster();
 
-            $request = Http::baseUrl($cluster->getUrl())
-                ->throw()
-                ->withUserAgent($cluster->getManagerName())
-                ->withHeaders(['Accept-Encoding' => 'gzip, deflate']);
+        $request = Http::baseUrl($cluster->getUrl())
+            ->withUserAgent($cluster->getManagerName())
+            ->withHeaders(['Accept-Encoding' => 'gzip, deflate']);
 
-            if ($stream) {
-                $request->withOptions(['stream' => true]);
-            }
+        if ($stream) {
+            $request->withOptions(['stream' => true]);
+        }
 
-            $this->applyAuthentication($request);
+        $this->applyAuthentication($request);
 
-            $request->withOptions((array) config('kubernetes.client.options', []));
+        $request->withOptions((array) config('kubernetes.client.options', []));
 
-            if ($contentType !== null) {
-                $request->withBody($payload, $contentType);
-            } else {
-                $request->withBody($payload);
-            }
+        if ($contentType !== null) {
+            $request->withBody($payload, $contentType);
+        } else {
+            $request->withBody($payload);
+        }
 
-            return $request->send($method, "{$path}?{$this->getQueryString($query)}");
-        } catch (RequestException $e) {
-            $message = $e->response->json('message');
+        // The limiter callback returns the raw Response (429 and all) so hcrl's
+        // adaptive path can read the apiserver's `Retry-After` header before we
+        // convert a failed response into an exception. Throwing inside the
+        // callback would lose that signal.
+        $response = $this->throttled(
+            $cluster,
+            fn (): Response => $request->send($method, "{$path}?{$this->getQueryString($query)}"),
+        );
+
+        if ($response->failed()) {
+            $message = $response->json('message');
 
             throw new KubernetesException(
-                $e->response,
+                $response,
                 is_string($message) ? $message : null,
             );
         }
+
+        return $response;
     }
 
     protected function applyAuthentication(PendingRequest $request): void

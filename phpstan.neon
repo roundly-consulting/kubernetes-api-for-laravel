@@ -3,5 +3,7 @@ parameters:
     paths:
         - src
         - config
+    configDirectories:
+        - %currentWorkingDirectory%/config
     tmpDir: build/phpstan
     checkModelProperties: true

@@ -12,6 +12,27 @@ return [
     ],
 
     /*
+     * Client-side rate limiting for every apiserver request, powered by
+     * roundly-consulting/http-client-rate-limits. Each cluster gets its own
+     * budget (keyed by manager name or host), so one busy cluster never starves
+     * another. By default requests are *paced* (the limiter waits for the window
+     * to free up); set `max_wait` to fail fast with a RateLimitExceededException
+     * instead. With `adaptive` on, a 429 `Retry-After` from the apiserver
+     * self-tunes the limiter. Set `enabled => false` for the raw, unthrottled
+     * client. For a budget shared across workers, point hcrl's `store` at
+     * Cache/Redis/Database via HTTP_CLIENT_RATE_LIMITS_STORE.
+     */
+    'rate_limits' => [
+        'enabled' => env('KUBERNETES_RATELIMIT_ENABLED', true),
+        'owner' => env('KUBERNETES_RATELIMIT_OWNER', 'app'),
+        'max_attempts' => env('KUBERNETES_RATELIMIT', 400),
+        'timespan' => env('KUBERNETES_RATELIMIT_TIMESPAN', 'minute'), // second|minute|hour|day
+        'adaptive' => env('KUBERNETES_RATELIMIT_ADAPTIVE', true),     // honour 429 Retry-After
+        'max_wait' => env('KUBERNETES_RATELIMIT_MAX_WAIT'),           // ms; null = pace, set = fail fast
+        'jitter' => env('KUBERNETES_RATELIMIT_JITTER'),               // ms; null = none
+    ],
+
+    /*
      * Traefik ships its CRDs under the `traefik.io` API group since v3
      * (formerly `traefik.containo.us`). Override this to point the bundled
      * Traefik resources at whichever group your cluster exposes; set it to
