@@ -24,6 +24,20 @@ $deployments = Kubernetes::cluster('production')->deployments()->get();
 - PHP 8.4 or higher
 - Laravel 12 or 13
 
+## Integrates with
+
+This package builds on two sibling roundly-consulting packages, both hard requirements
+(wired by path locally and VCS on CI until they land on Packagist):
+
+- **[`roundly-consulting/enums-for-laravel`](https://github.com/roundly-consulting/enums-for-laravel)** —
+  powers the richer `PatchType` enum. Beyond `PatchType::StrategicMerge->contentType()` you now get
+  `PatchType::values()`, `PatchType::validationRule()`, `PatchType::options()`/`toOptions()`, clean
+  `readable()`/`label()` names ("Strategic Merge", "Merge", "Json", "Apply"), and case lookups
+  (`fromName()`, `fromLabel()`).
+- **[`roundly-consulting/http-client-rate-limits-for-laravel`](https://github.com/roundly-consulting/http-client-rate-limits-for-laravel)** —
+  paces every apiserver request per cluster, honours a `429 Retry-After`, and offers a fail-fast
+  ceiling. See [Client-side rate limiting](#client-side-rate-limiting).
+
 ## Installation
 
 Install the package via Composer:
@@ -53,6 +67,15 @@ return [
         'options' => [
             'timeout' => 5,
         ],
+    ],
+    'rate_limits' => [
+        'enabled' => env('KUBERNETES_RATELIMIT_ENABLED', true),
+        'owner' => env('KUBERNETES_RATELIMIT_OWNER', 'app'),
+        'max_attempts' => env('KUBERNETES_RATELIMIT', 400),
+        'timespan' => env('KUBERNETES_RATELIMIT_TIMESPAN', 'minute'),
+        'adaptive' => env('KUBERNETES_RATELIMIT_ADAPTIVE', true),
+        'max_wait' => env('KUBERNETES_RATELIMIT_MAX_WAIT'),
+        'jitter' => env('KUBERNETES_RATELIMIT_JITTER'),
     ],
     'traefik' => [
         'group' => 'traefik.io/v1alpha1',
@@ -98,6 +121,13 @@ return [
 | Key | Type | Default | Purpose |
 |---|---|---|---|
 | `client.options` | `array<string, mixed>` | `['timeout' => 5]` | Laravel HTTP client options merged into every request the package sends (timeout, proxy, etc.). |
+| `rate_limits.enabled` | `bool` | `true` (`KUBERNETES_RATELIMIT_ENABLED`) | Toggle client-side rate limiting. `false` sends raw, unthrottled requests. |
+| `rate_limits.owner` | `string` | `app` (`KUBERNETES_RATELIMIT_OWNER`) | Namespaces the budget key, so several apps/workers can share (or isolate) a cluster budget. |
+| `rate_limits.max_attempts` | `int` | `400` (`KUBERNETES_RATELIMIT`) | Requests allowed per cluster per window before pacing kicks in. |
+| `rate_limits.timespan` | `string` | `minute` (`KUBERNETES_RATELIMIT_TIMESPAN`) | Window length: `second`, `minute`, `hour`, or `day`. |
+| `rate_limits.adaptive` | `bool` | `true` (`KUBERNETES_RATELIMIT_ADAPTIVE`) | Honour the apiserver's `Retry-After` header on a `429`, self-tuning the limiter. |
+| `rate_limits.max_wait` | `int\|null` (ms) | `null` (`KUBERNETES_RATELIMIT_MAX_WAIT`) | `null` paces (waits). Set a ceiling in ms to fail fast with a `RateLimitExceededException` instead. |
+| `rate_limits.jitter` | `int\|null` (ms) | `null` (`KUBERNETES_RATELIMIT_JITTER`) | Random spread added to each defer, smoothing thundering-herd bursts. |
 | `traefik.group` | `string` | `traefik.io/v1alpha1` | The API group/version the bundled Traefik resources target. Set it to `traefik.containo.us/v1alpha1` for Traefik installations older than v3. |
 | `resources` | `array<string, class-string>` | the core, workload, RBAC, policy + Traefik resources above | Maps an accessor name (e.g. `deployments`) to the resource class that backs it. Each entry becomes a method/magic method on a cluster (`$cluster->deployments()`). Add your own CRDs here to register them globally. |
 
@@ -491,6 +521,49 @@ try {
     $e->response->json('message');   // the Kubernetes error message
 }
 ```
+
+### Client-side rate limiting
+
+Every apiserver request is paced through
+[`roundly-consulting/http-client-rate-limits-for-laravel`](https://github.com/roundly-consulting/http-client-rate-limits-for-laravel),
+keyed **per cluster** (by manager name, falling back to the request host) so one busy cluster never
+starves another. Kubernetes API Priority & Fairness is per-apiserver, so a per-cluster budget maps
+directly onto how the server enforces its own limits.
+
+By default the client makes up to **400 requests per minute** per cluster and **paces** anything
+beyond that (it waits for the window to free up rather than erroring). With `adaptive` on, a `429`
+from the apiserver is read for its `Retry-After` value and self-tunes the limiter — so the next
+request already backs off by exactly what the server asked for.
+
+Tune it entirely from config/env (see the [Configuration](#configuration) table):
+
+```dotenv
+KUBERNETES_RATELIMIT=400            # attempts per window, per cluster
+KUBERNETES_RATELIMIT_TIMESPAN=minute
+KUBERNETES_RATELIMIT_ADAPTIVE=true  # honour 429 Retry-After
+```
+
+**Fail fast instead of waiting.** Set a `max_wait` ceiling (milliseconds). When a request would
+have to wait longer than that, it throws
+`RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException` (which exposes `->cluster`
+and `->availableInSeconds`) instead of blocking:
+
+```php
+use RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException;
+
+try {
+    $cluster->pods()->get();
+} catch (RateLimitExceededException $e) {
+    report("Cluster {$e->cluster} is throttled; retry in {$e->availableInSeconds}s");
+}
+```
+
+**Disable it** entirely with `KUBERNETES_RATELIMIT_ENABLED=false` for the raw, unthrottled client.
+
+**Shared budgets across workers.** The limiter defaults to an in-memory store (per process — ideal
+for a single worker or CLI run). For a budget shared across queue workers or servers, point the
+underlying package's store at Cache, Redis, or the database via its own
+`HTTP_CLIENT_RATE_LIMITS_STORE` setting; this package does not force a store.
 
 ## Testing
 
