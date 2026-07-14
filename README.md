@@ -26,7 +26,7 @@ $deployments = Kubernetes::cluster('production')->deployments()->get();
 
 ## Integrates with
 
-This package builds on two sibling roundly-consulting packages, both hard requirements
+This package builds on three sibling roundly-consulting packages, all hard requirements
 (wired by path locally and VCS on CI until they land on Packagist):
 
 - **[`roundly-consulting/enums-for-laravel`](https://github.com/roundly-consulting/enums-for-laravel)** —
@@ -37,6 +37,11 @@ This package builds on two sibling roundly-consulting packages, both hard requir
 - **[`roundly-consulting/http-client-rate-limits-for-laravel`](https://github.com/roundly-consulting/http-client-rate-limits-for-laravel)** —
   paces every apiserver request per cluster, honours a `429 Retry-After`, and offers a fail-fast
   ceiling. See [Client-side rate limiting](#client-side-rate-limiting).
+- **[`roundly-consulting/package-toolkit-for-laravel`](https://github.com/roundly-consulting/package-toolkit-for-laravel)** —
+  bootstraps the service provider (config merge/publish, commands) and adds a `php artisan about`
+  section for the package. Its `HasRetryAfter` contract is what `RateLimitExceededException`
+  implements, so a host can render a `Retry-After` header from any roundly rate-limit failure
+  without knowing which package threw it.
 
 ## Installation
 
@@ -546,7 +551,7 @@ KUBERNETES_RATELIMIT_ADAPTIVE=true  # honour 429 Retry-After
 **Fail fast instead of waiting.** Set a `max_wait` ceiling (milliseconds). When a request would
 have to wait longer than that, it throws
 `RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException` (which exposes `->cluster`
-and `->availableInSeconds`) instead of blocking:
+and, via the toolkit's `HasRetryAfter` contract, `->retryAfterSeconds()`) instead of blocking:
 
 ```php
 use RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException;
@@ -554,7 +559,18 @@ use RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException;
 try {
     $cluster->pods()->get();
 } catch (RateLimitExceededException $e) {
-    report("Cluster {$e->cluster} is throttled; retry in {$e->availableInSeconds}s");
+    report("Cluster {$e->cluster} is throttled; retry in {$e->retryAfterSeconds()}s");
+}
+```
+
+Because the exception implements `RoundlyConsulting\PackageToolkit\Contracts\HasRetryAfter`, a host
+can handle every roundly rate-limit failure in one place:
+
+```php
+use RoundlyConsulting\PackageToolkit\Contracts\HasRetryAfter;
+
+if ($e instanceof HasRetryAfter) {
+    return response('Too Many Requests', 429, ['Retry-After' => $e->retryAfterSeconds()]);
 }
 ```
 

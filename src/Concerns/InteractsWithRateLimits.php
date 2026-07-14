@@ -79,7 +79,7 @@ trait InteractsWithRateLimits
         } catch (HttpRateLimitExceededException $exception) {
             throw RateLimitExceededException::for(
                 cluster: $this->clusterKey($cluster),
-                availableInSeconds: (int) ceil($exception->delayMs / 1000),
+                retryAfterSeconds: (int) ceil($exception->delayMs / 1000),
             );
         }
     }

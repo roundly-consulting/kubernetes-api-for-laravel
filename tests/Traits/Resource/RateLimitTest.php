@@ -8,6 +8,7 @@ use RoundlyConsulting\KubernetesApi\Exceptions\KubernetesException;
 use RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException;
 use RoundlyConsulting\KubernetesApi\Kubernetes;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
+use RoundlyConsulting\PackageToolkit\Contracts\HasRetryAfter;
 
 function clusterResource(string $manager = 'Pest Tests', string $url = 'https://localhost'): Deployment
 {
@@ -63,7 +64,7 @@ it('fails fast with a native exception when the wait exceeds max_wait', function
         );
 });
 
-it('exposes the cluster and wait window on the fail-fast exception', function () {
+it('exposes the cluster and a retry-after hint on the fail-fast exception', function () {
     config()->set('kubernetes.rate_limits.max_attempts', 1);
     config()->set('kubernetes.rate_limits.max_wait', 0);
     RateLimits::fake();
@@ -74,8 +75,9 @@ it('exposes the cluster and wait window on the fail-fast exception', function ()
     try {
         clusterResource()->get();
     } catch (RateLimitExceededException $e) {
-        expect($e->cluster)->toBe('Pest Tests')
-            ->and($e->availableInSeconds)->toBeGreaterThan(0);
+        expect($e)->toBeInstanceOf(HasRetryAfter::class)
+            ->and($e->cluster)->toBe('Pest Tests')
+            ->and($e->retryAfterSeconds())->toBeGreaterThan(0);
 
         return;
     }
