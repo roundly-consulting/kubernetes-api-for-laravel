@@ -4,31 +4,41 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi;
 
-use Illuminate\Support\ServiceProvider;
 use RoundlyConsulting\KubernetesApi\Commands\PingCommand;
 use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
+use RoundlyConsulting\PackageToolkit\Package;
+use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
 
-final class KubernetesApiServiceProvider extends ServiceProvider
+final class KubernetesApiServiceProvider extends PackageServiceProvider
 {
-    public function register(): void
+    public function configurePackage(Package $package): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/kubernetes.php', 'kubernetes');
+        $package
+            ->name('kubernetes')
+            ->hasConfigFile()
+            ->hasCommands([
+                PingCommand::class,
+            ])
+            ->contributesToAbout(static function (): array {
+                /** @var array<string, mixed> $resources */
+                $resources = config('kubernetes.resources', []);
+                $throttled = config('kubernetes.rate_limits.enabled', true) !== false;
+
+                return [
+                    'Rate limiting' => $throttled ? 'ENABLED' : 'OFF',
+                    'Adaptive throttling' => $throttled && config('kubernetes.rate_limits.adaptive', true) !== false ? 'ON' : 'OFF',
+                    'Registered resources' => (string) count($resources),
+                    'Traefik group' => (string) config('kubernetes.traefik.group', 'traefik.io/v1alpha1'),
+                ];
+            });
     }
 
     public function boot(): void
     {
+        parent::boot();
+
         $this->registerConfiguredResources();
-
-        if ($this->app->runningInConsole()) {
-            $this->commands([
-                PingCommand::class,
-            ]);
-
-            $this->publishes([
-                __DIR__.'/../config/kubernetes.php' => config_path('kubernetes.php'),
-            ], 'kubernetes-config');
-        }
     }
 
     private function registerConfiguredResources(): void
