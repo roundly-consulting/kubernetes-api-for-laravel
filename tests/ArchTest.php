@@ -31,14 +31,29 @@ ArchPresets::strictTypes('RoundlyConsulting\KubernetesApi');
  * be inert. The reason those 45 classes must stay non-final is pinned instead by
  * tests/ResourceSwap/ResourceRegistrySwapTest.php, which drives a real host subclass
  * through the registry before boot — and which found that the seam did not work at all.
+ *
+ * The list moved to the `$ignoring` PARAMETER, joining the one `noDebuggingLeftovers`
+ * already carries below — two lists in one file, which only works as of
+ * testing-for-laravel 25f6cc1 (each pin is keyed by its own preset's description; a
+ * fixed one made the second list a hard TestAlreadyExist). The parameter buys both
+ * guarantees the fluent form cannot: the entries are rot-checked, and the prefix SHADOW
+ * is recovered.
+ *
+ * The shadow is not hypothetical here. `Kubernetes::class` also silences
+ * `KubernetesApiServiceProvider` — Pest matches exemptions by string prefix, not class
+ * identity (pest-plugin-arch Blueprint.php:103), and the provider's FQCN starts with the
+ * manager's. Nobody exempted it and nothing reported it. It is `final` today, so this is
+ * green and the finding is inert — but `finalByDefault` had silently stopped applying to
+ * the provider, and now it applies again by reflection.
  */
-ArchPresets::finalByDefault('RoundlyConsulting\KubernetesApi')
-    ->ignoring([
-        'RoundlyConsulting\KubernetesApi\Resources',
-        'RoundlyConsulting\KubernetesApi\Exceptions',
-        Kubernetes::class,
-        RoundlyConsulting\KubernetesApi\Facades\Kubernetes::class,
-    ]);
+ArchPresets::finalByDefault('RoundlyConsulting\KubernetesApi', [
+    // Namespace-form, deliberate subtree exclusions — the shadow guard leaves these
+    // alone on purpose: what a namespace exemption reaches IS the point.
+    'RoundlyConsulting\KubernetesApi\Resources',
+    'RoundlyConsulting\KubernetesApi\Exceptions',
+    Kubernetes::class,
+    RoundlyConsulting\KubernetesApi\Facades\Kubernetes::class,
+]);
 
 /**
  * Scoped to the namespaces where a primitive would MEAN cryptography, rather than
