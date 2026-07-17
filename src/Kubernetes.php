@@ -141,82 +141,112 @@ class Kubernetes
 
     public function configMaps(): Resources\ConfigMap
     {
-        return $this->resource(Resources\ConfigMap::class);
+        return $this->configuredResource('configMaps', Resources\ConfigMap::class);
     }
 
     public function cronJobs(): Resources\CronJob
     {
-        return $this->resource(Resources\CronJob::class);
+        return $this->configuredResource('cronJobs', Resources\CronJob::class);
     }
 
     public function daemonSets(): Resources\DaemonSet
     {
-        return $this->resource(Resources\DaemonSet::class);
+        return $this->configuredResource('daemonSets', Resources\DaemonSet::class);
     }
 
     public function deployments(): Resources\Deployment
     {
-        return $this->resource(Resources\Deployment::class);
+        return $this->configuredResource('deployments', Resources\Deployment::class);
     }
 
     public function ingresses(): Resources\Ingress
     {
-        return $this->resource(Resources\Ingress::class);
+        return $this->configuredResource('ingresses', Resources\Ingress::class);
     }
 
     public function jobs(): Resources\Job
     {
-        return $this->resource(Resources\Job::class);
+        return $this->configuredResource('jobs', Resources\Job::class);
     }
 
     public function namespaces(): Resources\Namespaces
     {
-        return $this->resource(Resources\Namespaces::class);
+        return $this->configuredResource('namespaces', Resources\Namespaces::class);
     }
 
     public function nodes(): Resources\Node
     {
-        return $this->resource(Resources\Node::class);
+        return $this->configuredResource('nodes', Resources\Node::class);
     }
 
     public function persistentVolumes(): Resources\PersistentVolume
     {
-        return $this->resource(Resources\PersistentVolume::class);
+        return $this->configuredResource('persistentVolumes', Resources\PersistentVolume::class);
     }
 
     public function persistentVolumeClaims(): Resources\PersistentVolumeClaim
     {
-        return $this->resource(Resources\PersistentVolumeClaim::class);
+        return $this->configuredResource('persistentVolumeClaims', Resources\PersistentVolumeClaim::class);
     }
 
     public function pods(): Resources\Pod
     {
-        return $this->resource(Resources\Pod::class);
+        return $this->configuredResource('pods', Resources\Pod::class);
     }
 
     public function replicaSets(): Resources\ReplicaSet
     {
-        return $this->resource(Resources\ReplicaSet::class);
+        return $this->configuredResource('replicaSets', Resources\ReplicaSet::class);
     }
 
     public function secrets(): Resources\Secret
     {
-        return $this->resource(Resources\Secret::class);
+        return $this->configuredResource('secrets', Resources\Secret::class);
     }
 
     public function services(): Resources\Service
     {
-        return $this->resource(Resources\Service::class);
+        return $this->configuredResource('services', Resources\Service::class);
     }
 
     public function statefulSets(): Resources\StatefulSet
     {
-        return $this->resource(Resources\StatefulSet::class);
+        return $this->configuredResource('statefulSets', Resources\StatefulSet::class);
     }
 
     public function storageClasses(): Resources\StorageClass
     {
-        return $this->resource(Resources\StorageClass::class);
+        return $this->configuredResource('storageClasses', Resources\StorageClass::class);
+    }
+
+    /**
+     * Resolve a resource accessor through the `kubernetes.resources` seam.
+     *
+     * These accessors used to hard-code the packaged class — `$this->resource(
+     * Resources\Pod::class)` — while the provider separately registered a macro per
+     * configured name. A real method always wins over a macro (`Macroable::__call` only
+     * fires when the method does not exist), so for all sixteen of them the documented
+     * `kubernetes.resources` key was dead: a host pointing `pods` at its own subclass
+     * still got the packaged Pod.
+     *
+     * The map is read wholesale and indexed, rather than through a
+     * `config("kubernetes.resources.{$name}")` interpolation, so the read stays a literal
+     * the config contract can see.
+     *
+     * @param  class-string<TResource>  $default
+     * @return TResource
+     *
+     * @template TResource of Resource
+     */
+    private function configuredResource(string $name, string $default): Resource
+    {
+        /** @var array<string, class-string<resource>> $resources */
+        $resources = config('kubernetes.resources', []);
+
+        /** @var class-string<TResource> $class */
+        $class = $resources[$name] ?? $default;
+
+        return $this->resource($class);
     }
 
     protected function getClusterMacroName(string $name): string
