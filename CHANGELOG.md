@@ -4,6 +4,11 @@ All notable changes to `kubernetes-api-for-laravel` will be documented in this f
 
 ## Unreleased
 
+### Removed
+
+- The manual `integration-tests` workflow (it targeted a self-hosted OrbStack runner, which a
+  public repository must never reach). The live suite runs locally via `composer test-integration`.
+
 ### Added
 
 - **One-line cluster setup:** `Kubernetes::fromKubeConfig(path, context)` and
@@ -45,7 +50,7 @@ All notable changes to `kubernetes-api-for-laravel` will be documented in this f
   setters.
 - **Guarded OrbStack integration suite** (`composer test-integration`, opt-in via
   `K8S_INTEGRATION=1`) with an `IntegrationGuard` that refuses any non-OrbStack/non-loopback
-  target, plus a manual `integration-tests` workflow.
+  target. Run it locally with `composer test-integration`.
 
 ### Changed
 
