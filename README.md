@@ -27,6 +27,8 @@ resource definitions.
 ```php
 use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
 
+$pods = Kubernetes::namespace('shop')->pods()->whereLabel('app', 'web')->get();
+
 $deployments = Kubernetes::cluster('production')->deployments()->get();
 ```
 
@@ -79,6 +81,22 @@ The published `config/kubernetes.php` looks like this:
 use RoundlyConsulting\KubernetesApi\Resources;
 
 return [
+    'default' => env('KUBERNETES_CLUSTER', 'default'),
+    'clusters' => [
+        'default' => [
+            'source' => env('KUBERNETES_SOURCE', 'url'),      // url | kubeconfig | in-cluster
+            'url' => env('KUBERNETES_URL'),
+            'token' => env('KUBERNETES_TOKEN'),
+            'certificate' => env('KUBERNETES_CLIENT_CERTIFICATE'),
+            'private_key' => env('KUBERNETES_CLIENT_KEY'),
+            'ca_certificate' => env('KUBERNETES_CA_CERTIFICATE'),
+            'verify' => env('KUBERNETES_VERIFY_SSL', true),
+            'kubeconfig' => env('KUBERNETES_KUBECONFIG'),     // null = KUBECONFIG or ~/.kube/config
+            'context' => env('KUBERNETES_CONTEXT'),           // null = current-context
+            'namespace' => env('KUBERNETES_NAMESPACE', 'default'),
+            'manager' => env('KUBERNETES_MANAGER'),
+        ],
+    ],
     'client' => [
         'options' => [
             'timeout' => 5,
@@ -109,7 +127,7 @@ return [
         'ingresses' => Resources\Ingress::class,
         'jobs' => Resources\Job::class,
         'limitRanges' => Resources\LimitRange::class,
-        'namespaces' => Resources\Namespaces::class,
+        'namespaces' => Resources\KubernetesNamespace::class,
         'networkPolicies' => Resources\NetworkPolicy::class,
         'nodes' => Resources\Node::class,
         'persistentVolumes' => Resources\PersistentVolume::class,
@@ -136,6 +154,15 @@ return [
 
 | Key | Type | Default | Purpose |
 |---|---|---|---|
+| `default` | `string` | `default` (`KUBERNETES_CLUSTER`) | The cluster `Kubernetes::pods()`, `Kubernetes::ping()` and every other default-cluster shortcut use, and what `kubernetes:ping` checks without an argument. |
+| `clusters.<name>.source` | `string` | `url` (`KUBERNETES_SOURCE`) | Where the connection comes from: `url` (the keys below), `kubeconfig` (a kubeconfig file and context) or `in-cluster` (the pod's service account). |
+| `clusters.<name>.url` | `string\|null` | `null` (`KUBERNETES_URL`) | The apiserver URL for the `url` source. |
+| `clusters.<name>.token` | `string\|null` | `null` (`KUBERNETES_TOKEN`) | Bearer token. |
+| `clusters.<name>.certificate` / `private_key` / `ca_certificate` | `string\|null` | `null` | Paths to the client certificate, its key and the CA bundle. |
+| `clusters.<name>.verify` | `bool` | `true` (`KUBERNETES_VERIFY_SSL`) | TLS verification. Only turn off for local development. |
+| `clusters.<name>.kubeconfig` / `context` | `string\|null` | `null` | For the `kubeconfig` source: the file (null = `KUBECONFIG` or `~/.kube/config`) and context (null = `current-context`). |
+| `clusters.<name>.namespace` | `string` | `default` (`KUBERNETES_NAMESPACE`) | The default namespace for namespaced resources on this cluster. |
+| `clusters.<name>.manager` | `string\|null` | `null` (`KUBERNETES_MANAGER`) | The field manager / user agent; also keys the cluster's rate-limit budget. |
 | `client.options` | `array<string, mixed>` | `['timeout' => 5]` | Laravel HTTP client options merged into every request the package sends (timeout, proxy, etc.). |
 | `rate_limits.enabled` | `bool` | `true` (`KUBERNETES_RATELIMIT_ENABLED`) | Toggle client-side rate limiting. `false` sends raw, unthrottled requests. |
 | `rate_limits.owner` | `string` | `app` (`KUBERNETES_RATELIMIT_OWNER`) | Namespaces the budget key, so several apps/workers can share (or isolate) a cluster budget. |
@@ -145,7 +172,7 @@ return [
 | `rate_limits.max_wait` | `int\|null` (ms) | `null` (`KUBERNETES_RATELIMIT_MAX_WAIT`) | `null` paces (waits). Set a ceiling in ms to fail fast with a `RateLimitExceededException` instead. |
 | `rate_limits.jitter` | `int\|null` (ms) | `null` (`KUBERNETES_RATELIMIT_JITTER`) | Random spread added to each defer, smoothing thundering-herd bursts. |
 | `traefik.group` | `string` | `traefik.io/v1alpha1` | The API group/version the bundled Traefik resources target. Set it to `traefik.containo.us/v1alpha1` for Traefik installations older than v3. |
-| `resources` | `array<string, class-string>` | the core, workload, RBAC, policy + Traefik resources above | Maps an accessor name (e.g. `deployments`) to the resource class that backs it. Each entry becomes a method/magic method on a cluster (`$cluster->deployments()`). Add your own CRDs here to register them globally. |
+| `resources` | `array<string, class-string>` | the core, workload, RBAC, policy + Traefik resources above | Maps an accessor name (e.g. `deployments`) to the resource class that backs it (`$cluster->deployments()`). Point a name at your own subclass to swap it, or add your own CRDs here to register them globally. |
 
 The built-in accessors cover config maps, secrets, pods, deployments, replica sets, stateful
 sets, daemon sets, replication controllers, jobs, cron jobs, services, endpoints, ingresses,
@@ -154,27 +181,112 @@ namespaces, nodes, events, persistent volumes and claims, storage classes, RBAC
 horizontal pod autoscalers, resource quotas, limit ranges, and the Traefik CRDs
 (`IngressRoute`, `Middleware`, `TLSStore`, `ServersTransport`, `TLSOption`).
 
-The package works with zero configuration — clusters are defined in code (see below) and the
-default `resources` map ships built in.
+The package works with zero configuration: set `KUBERNETES_URL` and `KUBERNETES_TOKEN` for a
+single cluster, add more under `clusters`, or define clusters in code (see below). The default
+`resources` map ships built in. The Namespace resource class is `Resources\KubernetesNamespace`
+(`Namespace` is a reserved word in PHP); its accessor is still `namespaces()`.
 
 ## Usage
 
-### Creating a cluster on the fly
+Everything starts at the `Kubernetes` facade. It hands out **clusters** (immutable clients)
+and, through them, **resource objects** (`Pod`, `Deployment`, …) that read and write the
+apiserver. Calls without a cluster name go to the default cluster from `config/kubernetes.php`.
 
 ```php
 use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
 
+Kubernetes::pods()->get();                                   // default cluster, default namespace
+Kubernetes::namespace('shop')->deployments()->get();         // default cluster, scoped to `shop`
+Kubernetes::cluster('production')->services()->get();        // a named cluster
+
+Kubernetes::ping();                                          // bool — does the apiserver answer?
+Kubernetes::version()->gitVersion;                           // "v1.34.0" (a VersionInfo DTO)
+
+Kubernetes::hasCluster('production');                        // bool
+Kubernetes::clusters();                                      // ['default', 'production']
+```
+
+### Facade reference
+
+| Method | Returns | What it does |
+|---|---|---|
+| `cluster(?string $name = null)` | `Cluster` | A configured or registered cluster (the default one when `null`). Resolved once and reused. |
+| `hasCluster(string $name)` / `clusters()` | `bool` / `list<string>` | Whether a cluster exists; every configured and registered name. |
+| `registerCluster(string $name, Closure $definition)` | `void` | Define a cluster in code; overrides a configured one of the same name. |
+| `registerResource(string $name, string $class)` | `void` | Register a resource class under an accessor name for every cluster. |
+| `namespace(string $namespace)` | `Cluster` | The default cluster, scoped to one namespace. |
+| `ping()` / `version()` | `bool` / `VersionInfo` | Health and build information of the default cluster. |
+| `url(string $url)` | `Cluster` | A new, blank ad-hoc cluster. |
+| `connect(KubeConfig $config)` | `Cluster` | A new ad-hoc cluster from a resolved connection. |
+| `fromKubeConfig(?string $path, ?string $context)` / `inCluster()` | `Cluster` | A new ad-hoc cluster from a kubeconfig context or the pod's service account. |
+| `resource(string $class)` | `Resource` | Any resource class, bound to the default cluster. |
+| `pods()`, `deployments()`, `services()`, … (33 accessors) | the resource | Every packaged resource, bound to the default cluster. |
+| `fake()` | `KubernetesFake` | Swap in the in-memory apiserver for tests (see [Testing your app](#testing-your-app)). |
+
+Every `Cluster` has the same accessors plus `name()`, `namespace()`, `ping()`, `version()`,
+`resource()`, the credential getters (`getUrl()`, `getToken()`, …) and a raw
+`request($method, $path, $query, $body)` escape hatch that is authenticated, rate limited and
+faked like everything else.
+
+### Without the facade
+
+The facade is sugar over `RoundlyConsulting\KubernetesApi\KubernetesManager`, a container
+singleton. Inject it for the same API:
+
+```php
+use RoundlyConsulting\KubernetesApi\KubernetesManager;
+use RoundlyConsulting\KubernetesApi\Resources\Deployment;
+
+final class ScaleCheckout
+{
+    public function __construct(private KubernetesManager $kubernetes) {}
+
+    public function __invoke(int $replicas): Deployment
+    {
+        return $this->kubernetes->cluster('production')
+            ->deployments()
+            ->setName('checkout')
+            ->scale($replicas);
+    }
+}
+```
+
+This package is a remote-API client, so there are no action classes: the use cases are the
+resource objects themselves. You can build one directly and bind it to a cluster from the
+manager — it goes through the same transport (and the same fake):
+
+```php
+use RoundlyConsulting\KubernetesApi\Resources\ConfigMap;
+
+ConfigMap::make()
+    ->setCluster($kubernetes->cluster('production'))
+    ->setNamespace('shop')
+    ->setName('settings')
+    ->setData(['FEATURE_X' => 'on'])
+    ->create();
+```
+
+### Clusters are immutable
+
+`url()`, every `with*()` / `without*()`, `withManagerName()`, `withDefaultNamespace()` and
+`namespace()` return a **new** cluster and leave the one you called untouched. A client handed
+out by the facade can never be re-pointed or re-credentialed by another caller.
+
+```php
 $cluster = Kubernetes::url('https://api.my-cluster.example:6443')
     ->withToken('service-account-token')
     ->withCertificate('/path/to/client.crt')
     ->withPrivateKey('/path/to/client.key')
     ->withCaCertificate('/path/to/ca.crt')
     ->withSslVerification()
-    ->setManagerName('MyApp'); // sets the field manager on resources this app manages
+    ->withManagerName('MyApp'); // the field manager on resources this app manages
+
+$cluster->withToken('other');   // returns a copy — $cluster still uses 'service-account-token'
 ```
 
-For local development you can skip the certificates and disable verification (not
-recommended for production):
+`Kubernetes::url()` starts from a blank client: it inherits nothing — no token, no
+certificate — from the default cluster. For local development you can skip the certificates
+and disable verification (not recommended for production):
 
 ```php
 $cluster = Kubernetes::url('https://127.0.0.1:6443')
@@ -200,37 +312,50 @@ $cluster = Kubernetes::fromKubeConfig(context: 'orbstack');
 $cluster = Kubernetes::fromKubeConfig(path: '/path/to/kubeconfig', context: 'staging');
 
 // From in-cluster service-account mounts (when running inside a pod):
-$cluster = Kubernetes::inCluster()->setManagerName('my-app');
+$cluster = Kubernetes::inCluster()->withManagerName('my-app');
 ```
+
+The same sources work from config — `'source' => 'kubeconfig'` or `'source' => 'in-cluster'`
+on a `clusters` entry.
 
 ### Registering named clusters
 
-Register clusters once (for example in a service provider's `boot` method) and resolve them
-anywhere by name:
+Configure clusters under `clusters` in `config/kubernetes.php`, or register them in code (for
+example in a service provider's `boot` method). The closure receives a blank cluster and must
+**return** the configured one; it runs lazily, the first time the cluster is used.
 
 ```php
+use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
-use RoundlyConsulting\KubernetesApi\Kubernetes as Cluster;
 
-Kubernetes::registerCluster('production', function (Cluster $cluster) {
-    return $cluster
-        ->url('https://api.prod.example:6443')
-        ->withToken('prod-token')
-        ->withCaCertificate('/path/to/ca.crt');
-});
+Kubernetes::registerCluster('production', fn (Cluster $cluster): Cluster => $cluster
+    ->url('https://api.prod.example:6443')
+    ->withToken(config('services.kubernetes.production_token'))
+    ->withCaCertificate('/path/to/ca.crt'));
 
-// Resolve it later by name…
 $cluster = Kubernetes::cluster('production');
-
-// …or via the generated accessor…
-$cluster = Kubernetes::getProductionCluster();
-
-// …or through dependency injection on the underlying class.
-public function index(\RoundlyConsulting\KubernetesApi\Kubernetes $kubernetes): void
-{
-    $cluster = $kubernetes->cluster('production');
-}
 ```
+
+An unknown name throws `ClusterNotFoundException`; a closure that returns anything but a
+`Cluster` throws `ClusterConfigurationException`.
+
+### Scoping to a namespace
+
+`namespace()` scopes a cluster to one namespace. Everything it hands out is pinned there:
+every request goes to that namespace, and any attempt to leave it — `setNamespace('other')`,
+`allNamespaces()`, `ignoreNamespace()`, re-scoping the cluster, binding the resource to a cluster
+scoped elsewhere — throws `NamespaceScopeException`. Items a scoped listing returns stay pinned
+too. Cluster-scoped kinds (nodes, namespaces, cluster roles, …) are unaffected.
+
+```php
+$shop = Kubernetes::namespace('shop');           // or Kubernetes::cluster('production')->namespace('shop')
+
+$shop->pods()->whereLabel('app', 'web')->get();  // GET /api/v1/namespaces/shop/pods?labelSelector=app=web
+$shop->pods()->setNamespace('kube-system');      // NamespaceScopeException
+```
+
+A `namespace` on a `clusters` entry (or `withDefaultNamespace()`) is only a default; `namespace()`
+is the boundary.
 
 ### Registering custom resources (CRDs)
 
@@ -251,12 +376,17 @@ class Application extends Resource
 
 Kubernetes::registerResource('apps', Application::class);
 
-Kubernetes::getProductionCluster()->apps()->get(); // all Application resources
+Kubernetes::cluster('production')->apps()->get(); // all Application resources
+Kubernetes::apps()->get();                        // on the default cluster
 ```
+
+Registering a packaged name (`pods`) swaps the class that name resolves to on every cluster. A
+name a `Cluster` method already answers (`url`, `namespace`, …) is refused.
 
 ### Cluster operations
 
-Operations use Laravel's HTTP client, so you can fake them with `Http::fake()` in your tests.
+Operations use Laravel's HTTP client. In your tests, prefer `Kubernetes::fake()` (see
+[Testing your app](#testing-your-app)); `Http::fake()` still works too.
 
 ```php
 $cluster = Kubernetes::cluster('production');
@@ -389,12 +519,16 @@ $result->successful();
 
 ### Diagnostics command
 
-Verify connectivity to a registered cluster:
+Verify connectivity to a cluster (the default one when no name is given):
 
 ```bash
 php artisan kubernetes:ping production
 # Connected to production — server v1.34.0
 ```
+
+In code, `Kubernetes::ping()` / `Kubernetes::cluster('production')->ping()` return a bool and
+`version()` returns a `VersionInfo` DTO (`major`, `minor`, `gitVersion`, `gitCommit`,
+`buildDate`, `goVersion`, `compiler`, `platform`).
 
 ### Building resources with value objects
 
@@ -508,15 +642,22 @@ $service->getClusterDns();                   // checkout.default.svc.cluster.loc
 
 ### Macros and conditionals
 
-Both the `Kubernetes` client and every resource use Laravel's `Macroable` and
-`Conditionable` traits, so you can extend and branch fluently:
+Both `Cluster` and every resource use Laravel's `Macroable` and `Conditionable` traits, so you
+can extend and branch fluently. A `Cluster` macro is also callable on the facade (for the
+default cluster):
 
 ```php
+use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 
-Deployment::macro('findCheckout', fn (): Deployment => Deployment::make()->withName('checkout')->find());
+Cluster::macro('checkout', fn (): Deployment => $this->deployments()->setName('checkout'));
+Kubernetes::checkout()->scale(3);
 
-Deployment::make()
+Deployment::macro('isPaused', fn (): bool => (bool) $this->getSpec('paused', false));
+
+Kubernetes::deployments()
+    ->setName('checkout')
+    ->find()
     ->when($scaleUp, fn (Deployment $deployment) => $deployment->setReplicas(5))
     ->update();
 ```
@@ -537,6 +678,18 @@ try {
     $e->response->json('message');   // the Kubernetes error message
 }
 ```
+
+The package's other exceptions, all under `RoundlyConsulting\KubernetesApi\Exceptions`:
+
+| Exception | Thrown when |
+|---|---|
+| `ClusterNotFoundException` | `cluster($name)` for a name that is neither configured nor registered |
+| `ClusterConfigurationException` | a cluster has no URL, a definition closure returns no `Cluster`, a config `source` is unknown, or a resource is used without a cluster |
+| `NamespaceScopeException` | a namespace-scoped client or resource is asked to leave its namespace (`->scope` names it) |
+| `InvalidResourceException` | `registerResource()` / `seed()` get a class that is not a resource or an unusable name |
+| `RateLimitExceededException` | the client-side budget is exhausted and `max_wait` is set (see below) |
+| `KubeConfigException` | a kubeconfig or the in-cluster credentials cannot be read |
+| `WebSocketException` | the exec WebSocket fails |
 
 ### Client-side rate limiting
 
@@ -592,9 +745,73 @@ for a single worker or CLI run). For a budget shared across queue workers or ser
 underlying package's store at Cache, Redis, or the database via its own
 `HTTP_CLIENT_RATE_LIMITS_STORE` setting; this package does not force a store.
 
+## Testing your app
+
+`Kubernetes::fake()` swaps the manager — behind the facade **and** in the container, so injected
+`KubernetesManager`s get it too — for an in-memory apiserver. Nothing reaches the network. Every
+cluster the manager hands out (named, default, ad-hoc, namespace-scoped) and every resource bound
+to one talks to the fake, which records each request.
+
+```php
+use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
+use RoundlyConsulting\KubernetesApi\Resources\Deployment;
+use RoundlyConsulting\KubernetesApi\Testing\RecordedRequest;
+
+it('scales checkout for the sale', function () {
+    $fake = Kubernetes::fake()->seed(Deployment::class, [
+        ['metadata' => ['name' => 'checkout', 'namespace' => 'shop'], 'spec' => ['replicas' => 2]],
+    ]);
+
+    app(PrepareForSale::class)();   // your code: Kubernetes::namespace('shop')->deployments()->setName('checkout')->scale(10)
+
+    $fake->assertScaled(Deployment::class, 'checkout', 10);
+    $fake->assertNothingDeleted();
+});
+```
+
+The fake behaves like a small apiserver: seeded and created objects can be listed (label and
+field selectors, `limit`/`continue`, all namespaces), found, updated, patched, scaled and
+deleted; a missing object is a real 404, a duplicate create or a stale `resourceVersion` a real
+409, and `dryRun()` requests validate without persisting. Each cluster name has its own store;
+ad-hoc clusters share the default cluster's.
+
+| Set-up | Effect |
+|---|---|
+| `seed(string $resource, array $items, ?string $cluster = null)` | Put objects (manifests or resource objects) on a cluster. `$resource` is a class or a registered name (`'pods'`). |
+| `seedLogs(string $pod, string $logs, string $namespace = 'default', ?string $cluster = null)` | What `logs()` / `streamLogs()` return. |
+| `stubExec(ExecResult\|Closure $result)` | What `exec()` returns (default: empty output, exit code 0). |
+| `stubVersion(VersionInfo\|string $version)` | What `version()` reports (default `v1.34.0`). |
+| `unreachable(bool $unreachable = true)` | Every request throws `ConnectionException`; `ping()` returns `false`. |
+| `recorded(?Closure $filter = null)` | Every `RecordedRequest` (verb, cluster, path, namespace, name, body, …). |
+
+| Assertion | Passes when |
+|---|---|
+| `assertSent(Closure $callback)` / `assertNothingSent()` | any request matches / no request at all |
+| `assertCreated($resource, $nameOrClosure = null)` / `assertNothingCreated()` | a create of that resource (optionally that name, or matching the closure) |
+| `assertUpdated(…)` / `assertNothingUpdated()` | a full update (`update()`, `updateOrCreate()` on an existing object) |
+| `assertPatched(…)` / `assertNothingPatched()` | any PATCH — `patch()`, `scale()`, `rolloutRestart()` |
+| `assertScaled($resource, $name, ?int $replicas = null)` / `assertNothingScaled()` | a `scale()` (to that many replicas) |
+| `assertRestarted($resource, $name)` / `assertNothingRestarted()` | a `rolloutRestart()` |
+| `assertDeleted(…)` / `assertNothingDeleted()` | a delete |
+| `assertExecuted(string $pod, ?array $command = null)` / `assertNothingExecuted()` | an `exec()` in that pod (with that exact command) |
+
+Dry-run requests are recorded but never satisfy the mutation assertions. Closures receive the
+`RecordedRequest`:
+
+```php
+$fake->assertCreated('configMaps', fn (RecordedRequest $request): bool => $request->namespace === 'shop'
+    && $request->input('data.FEATURE_X') === 'on');
+```
+
+Clusters registered before `fake()` carry over, and their definitions still run; under the fake
+`fromKubeConfig()` / `inCluster()` (and `kubeconfig` / `in-cluster` config sources) never read
+credentials. Approximations: strategic-merge and server-side-apply patches are applied as JSON
+merge patches, and logs/exec answer for any pod. Clusters built without the manager
+(`new Cluster`, `Cluster::make()`) bypass the fake.
+
 ## Testing
 
-The default suite is fully faked with `Http::fake()` and needs no cluster:
+The package's own suite is fully faked and needs no cluster:
 
 ```bash
 composer test
