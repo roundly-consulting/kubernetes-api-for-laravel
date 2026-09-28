@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Http\Client\Response;
 use RoundlyConsulting\HttpClientRateLimits\Enums\Timespan;
 use RoundlyConsulting\HttpClientRateLimits\Exceptions\RateLimitExceededException as HttpRateLimitExceededException;
+use RoundlyConsulting\HttpClientRateLimits\Facades\RateLimits;
 use RoundlyConsulting\HttpClientRateLimits\Limit;
 use RoundlyConsulting\HttpClientRateLimits\RateLimit;
 use RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException;
@@ -36,7 +37,7 @@ trait InteractsWithRateLimits
         $timespan = Timespan::tryFrom((string) ($config['timespan'] ?? 'minute')) ?? Timespan::Minute;
         $owner = (string) ($config['owner'] ?? 'app');
 
-        $rateLimit = RateLimit::make(new Limit(
+        $rateLimit = RateLimits::make(new Limit(
             maxAttempts: (int) ($config['max_attempts'] ?? 400),
             timespan: $timespan,
         ))->by("k8s:{$owner}:{$this->clusterKey($cluster)}");
