@@ -67,3 +67,8 @@ it('returns null when a 64-bit length header is truncated', function () {
 
     expect(WebSocketFrame::decode($partial))->toBeNull();
 });
+
+it('reports the FIN bit so fragmented messages can be reassembled', function () {
+    expect(WebSocketFrame::decode(chr(0x02).chr(1).'a'))->toMatchArray(['fin' => false, 'opcode' => WebSocketFrame::OPCODE_BINARY])
+        ->and(WebSocketFrame::decode(chr(0x80).chr(1).'b'))->toMatchArray(['fin' => true, 'opcode' => WebSocketFrame::OPCODE_CONTINUATION]);
+});

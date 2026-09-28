@@ -7,8 +7,8 @@ namespace RoundlyConsulting\KubernetesApi\WebSocket;
 /**
  * Minimal RFC 6455 frame codec covering the subset needed for the Kubernetes
  * exec channel: binary/close opcodes, client-side masking, and 7/16/64-bit
- * payload lengths. Continuation and control frames are handled enough to read
- * a streamed exec session to completion.
+ * payload lengths, and the FIN bit so a message fragmented over continuation
+ * frames can be reassembled.
  */
 final class WebSocketFrame
 {
@@ -51,11 +51,11 @@ final class WebSocketFrame
     }
 
     /**
-     * Decode the first frame in the buffer. Returns the opcode, the payload,
-     * and the number of bytes consumed, or null when the buffer holds an
+     * Decode the first frame in the buffer. Returns the FIN bit, the opcode, the
+     * payload, and the number of bytes consumed, or null when the buffer holds an
      * incomplete frame and more bytes are required.
      *
-     * @return array{opcode: int, payload: string, consumed: int}|null
+     * @return array{fin: bool, opcode: int, payload: string, consumed: int}|null
      */
     public static function decode(string $buffer): ?array
     {
@@ -65,6 +65,7 @@ final class WebSocketFrame
             return null;
         }
 
+        $fin = (ord($buffer[0]) & 0x80) !== 0;
         $opcode = ord($buffer[0]) & 0x0F;
         $second = ord($buffer[1]);
         $masked = ($second & 0x80) !== 0;
@@ -114,6 +115,7 @@ final class WebSocketFrame
         }
 
         return [
+            'fin' => $fin,
             'opcode' => $opcode,
             'payload' => $payload,
             'consumed' => $offset + $length,

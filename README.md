@@ -548,10 +548,16 @@ foreach ($cluster->pods()->withName('api')->streamLogs(new PodLogOptions(follow:
 
 // Exec a command inside a pod (over a WebSocket; returns stdout, stderr, and exit code).
 $result = $cluster->pods()->withName('api')->exec(['sh', '-c', 'echo hi']);
-$result->stdout;     // "hi\n"
-$result->exitCode;   // 0
-$result->successful();
+$result->stdout;       // "hi\n"
+$result->exitCode;     // 0 (null if the stream ended before the command finished)
+$result->successful(); // true only for exit code 0
+$result->completed();  // false if the connection dropped or client.stream_timeout passed
 ```
+
+`exec()` dials the cluster URL's own scheme, host, port and path prefix, so a proxied apiserver
+(`https://rancher.example/k8s/clusters/c-abc`) works just like a direct one. It waits for the
+apiserver to report the command's exit status. If the stream ends first, the result has no exit
+code and `successful()` is `false`, never a false success.
 
 ### Diagnostics command
 

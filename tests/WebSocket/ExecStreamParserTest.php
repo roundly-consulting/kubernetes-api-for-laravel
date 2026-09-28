@@ -11,12 +11,35 @@ it('demultiplexes stdout and stderr channels', function () {
     $parser->feed(chr(ExecStreamParser::CHANNEL_STDOUT).'world');
     $parser->feed(chr(ExecStreamParser::CHANNEL_STDERR).'oops');
 
+    $parser->feed(chr(ExecStreamParser::CHANNEL_ERROR).json_encode(['status' => 'Success']));
+
     $result = $parser->result();
 
     expect($result->stdout)->toBe('hello world')
         ->and($result->stderr)->toBe('oops')
         ->and($result->exitCode)->toBe(0)
+        ->and($result->completed())->toBeTrue()
         ->and($result->successful())->toBeTrue();
+});
+
+it('reports an unknown exit code when no status arrived', function () {
+    $parser = new ExecStreamParser;
+
+    $parser->feed(chr(ExecStreamParser::CHANNEL_STDOUT).'partial');
+
+    $result = $parser->result();
+
+    expect($result->exitCode)->toBeNull()
+        ->and($result->completed())->toBeFalse()
+        ->and($result->successful())->toBeFalse();
+});
+
+it('treats an empty status message as success', function () {
+    $parser = new ExecStreamParser;
+
+    $parser->feed(chr(ExecStreamParser::CHANNEL_ERROR));
+
+    expect($parser->exitCode())->toBe(0);
 });
 
 it('ignores empty and unknown-channel messages', function () {

@@ -17,6 +17,8 @@ final class LocalServer
     /** @var resource */
     private $process;
 
+    private bool $stopped = false;
+
     private function __construct(
         public readonly int $port,
         public readonly string $log,
@@ -59,6 +61,11 @@ final class LocalServer
 
     public function stop(): void
     {
+        if ($this->stopped) {
+            return;
+        }
+
+        $this->stopped = true;
         $status = proc_get_status($this->process);
 
         if ($status['running']) {

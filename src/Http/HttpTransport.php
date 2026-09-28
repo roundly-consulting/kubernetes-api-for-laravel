@@ -68,13 +68,9 @@ final class HttpTransport implements Transport
         return $this->throttled($cluster, fn (): Response => $request->send($method, $url));
     }
 
-    /**
-     * @codeCoverageIgnore Exercised by the live OrbStack integration suite, like
-     *   the {@see ExecConnection} it opens.
-     */
     public function exec(Cluster $cluster, string $path): ExecResult
     {
-        return (new ExecConnection($cluster))->send($path);
+        return (new ExecConnection($cluster, idleTimeout: self::streamTimeout()))->send($path);
     }
 
     /**

@@ -26,6 +26,8 @@ final class ExecStreamParser
 
     private string $error = '';
 
+    private bool $statusReceived = false;
+
     /**
      * Feed one demultiplexed message (channel byte + payload) into the parser.
      */
@@ -41,9 +43,15 @@ final class ExecStreamParser
         match ($channel) {
             self::CHANNEL_STDOUT => $this->stdout .= $payload,
             self::CHANNEL_STDERR => $this->stderr .= $payload,
-            self::CHANNEL_ERROR => $this->error .= $payload,
+            self::CHANNEL_ERROR => $this->status($payload),
             default => null,
         };
+    }
+
+    private function status(string $payload): void
+    {
+        $this->statusReceived = true;
+        $this->error .= $payload;
     }
 
     public function result(): ExecResult
@@ -56,12 +64,18 @@ final class ExecStreamParser
     }
 
     /**
-     * Resolve the command exit code from the accumulated error-channel status.
-     * `Success` (or an empty channel) maps to 0; a non-zero exit code is read
-     * from the `ExitCode` cause in the status details.
+     * Resolve the command exit code from the error-channel status. `Success` maps
+     * to 0; a non-zero exit code is read from the `ExitCode` cause in the status
+     * details; any other failure is 1. With `v4.channel.k8s.io` the apiserver always
+     * ends a finished command with a status, so none at all means the stream ended
+     * early (dropped connection, idle timeout) and the exit code is unknown: null.
      */
-    public function exitCode(): int
+    public function exitCode(): ?int
     {
+        if (! $this->statusReceived) {
+            return null;
+        }
+
         if (trim($this->error) === '') {
             return 0;
         }

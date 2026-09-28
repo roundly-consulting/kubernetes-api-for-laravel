@@ -10,29 +10,32 @@ use RoundlyConsulting\KubernetesApi\Exceptions\WebSocketException;
 
 /**
  * A self-contained WebSocket client for the Kubernetes exec subresource. It
- * opens a TLS stream (honouring the cluster's client certificate / CA /
- * token), performs the RFC 6455 upgrade requesting the `v4.channel.k8s.io`
- * subprotocol, then reads the demultiplexed stdout/stderr/error channels to
- * completion. Kept deliberately isolated so the core client stays pure
- * Laravel HTTP.
- *
- * @codeCoverageIgnore Exercised by the live OrbStack integration suite; the
- *   pure framing/parsing logic is unit-tested separately.
+ * dials the cluster URL's scheme, host and port (TLS for `https`, honouring the
+ * cluster's client certificate / CA / token), keeps the URL's path prefix (a
+ * Rancher-style proxied apiserver), performs the RFC 6455 upgrade requesting the
+ * `v4.channel.k8s.io` subprotocol, then reads the demultiplexed
+ * stdout/stderr/error channels until the apiserver reports the command's status.
+ * Kept deliberately isolated so the core client stays pure Laravel HTTP.
  */
 final class ExecConnection
 {
     private const SUBPROTOCOL = 'v4.channel.k8s.io';
 
-    /** @var resource */
-    private $socket;
-
+    /**
+     * @param  int  $connectTimeout  seconds allowed to connect and complete the upgrade
+     * @param  int  $idleTimeout  seconds of silence after which reading stops (0 = none)
+     */
     public function __construct(
         private readonly Cluster $cluster,
-        private readonly int $timeout = 30,
+        private readonly int $connectTimeout = 30,
+        private readonly int $idleTimeout = 0,
     ) {}
 
     /**
-     * Run the exec request and return the captured result.
+     * Run the exec request and return the captured result. A stream that ends before
+     * the apiserver reported a status yields a result without an exit code.
+     *
+     * @throws WebSocketException
      */
     public function send(string $path): ExecResult
     {
@@ -43,18 +46,31 @@ final class ExecConnection
             throw new WebSocketException("Invalid cluster URL: {$url}");
         }
 
+        $scheme = strtolower($parts['scheme'] ?? 'https');
+
+        if (! in_array($scheme, ['https', 'http'], true)) {
+            throw new WebSocketException("Unsupported cluster URL scheme for exec: {$scheme}");
+        }
+
         $host = $parts['host'];
-        $port = $parts['port'] ?? 443;
+        $port = $parts['port'] ?? ($scheme === 'https' ? 443 : 80);
+        $prefix = rtrim($parts['path'] ?? '', '/');
 
-        $this->socket = $this->openSocket($host, $port);
+        $socket = $this->openSocket($scheme === 'https' ? 'ssl' : 'tcp', $host, $port);
 
-        $this->handshake($host, $port, $path);
+        try {
+            $leftover = $this->handshake($socket, "{$host}:{$port}", $prefix.$path);
 
-        return $this->readStream();
+            return $this->readStream($socket, $leftover);
+        } finally {
+            if (is_resource($socket)) {
+                fclose($socket);
+            }
+        }
     }
 
     /** @return resource */
-    private function openSocket(string $host, int $port)
+    private function openSocket(string $transport, string $host, int $port)
     {
         $contextOptions = ['ssl' => [
             'verify_peer' => $this->cluster->shouldVerify(),
@@ -74,33 +90,40 @@ final class ExecConnection
             $contextOptions['ssl']['local_pk'] = $this->cluster->getPathToPrivateKey();
         }
 
-        $context = stream_context_create($contextOptions);
-
         $socket = @stream_socket_client(
-            "ssl://{$host}:{$port}",
+            "{$transport}://{$host}:{$port}",
             $errno,
             $errstr,
-            $this->timeout,
+            $this->connectTimeout,
             STREAM_CLIENT_CONNECT,
-            $context,
+            stream_context_create($contextOptions),
         );
 
         if ($socket === false) {
             throw new WebSocketException("Unable to connect to {$host}:{$port}: {$errstr} ({$errno})");
         }
 
-        stream_set_timeout($socket, $this->timeout);
+        stream_set_timeout($socket, $this->connectTimeout);
 
         return $socket;
     }
 
-    private function handshake(string $host, int $port, string $path): void
+    /**
+     * Upgrade the connection and return whatever arrived after the response headers:
+     * a quick apiserver (or a TLS-terminating proxy) sends the first frames — even
+     * the whole session — in the same read as the `101`.
+     *
+     * @param  resource  $socket
+     *
+     * @throws WebSocketException
+     */
+    private function handshake($socket, string $hostHeader, string $path): string
     {
         $key = base64_encode(random_bytes(16));
 
         $headers = [
             "GET {$path} HTTP/1.1",
-            "Host: {$host}:{$port}",
+            "Host: {$hostHeader}",
             'Upgrade: websocket',
             'Connection: Upgrade',
             "Sec-WebSocket-Key: {$key}",
@@ -112,12 +135,12 @@ final class ExecConnection
             $headers[] = 'Authorization: Bearer '.$this->cluster->getToken();
         }
 
-        fwrite($this->socket, implode("\r\n", $headers)."\r\n\r\n");
+        fwrite($socket, implode("\r\n", $headers)."\r\n\r\n");
 
         $response = '';
 
-        while (! str_contains($response, "\r\n\r\n")) {
-            $chunk = fread($this->socket, 1024);
+        while (($end = strpos($response, "\r\n\r\n")) === false) {
+            $chunk = fread($socket, 1024);
 
             if ($chunk === false || $chunk === '') {
                 break;
@@ -126,43 +149,59 @@ final class ExecConnection
             $response .= $chunk;
         }
 
-        if (! str_contains($response, ' 101 ')) {
+        if ($end === false || preg_match('/^HTTP\/\d(?:\.\d)? 101\b/', $response) !== 1) {
             throw new WebSocketException('WebSocket upgrade failed: '.trim($response));
         }
+
+        return substr($response, $end + 4);
     }
 
-    private function readStream(): ExecResult
+    /**
+     * Read frames until the apiserver closes the session, the connection ends or the
+     * idle timeout passes. Fragmented messages are reassembled and pings answered.
+     *
+     * @param  resource  $socket
+     */
+    private function readStream($socket, string $buffer): ExecResult
     {
+        // -1: PHP's "wait indefinitely" — a command may run quietly for a long time.
+        stream_set_timeout($socket, $this->idleTimeout > 0 ? $this->idleTimeout : -1);
+
         $parser = new ExecStreamParser;
-        $buffer = '';
+        $message = null;
 
-        while (! feof($this->socket)) {
-            $chunk = fread($this->socket, 8192);
-
-            if ($chunk === false || $chunk === '') {
-                break;
-            }
-
-            $buffer .= $chunk;
-
+        while (true) {
             while (($frame = WebSocketFrame::decode($buffer)) !== null) {
                 $buffer = substr($buffer, $frame['consumed']);
 
-                if ($frame['opcode'] === WebSocketFrame::OPCODE_CLOSE) {
-                    fclose($this->socket);
-
-                    return $parser->result();
+                switch ($frame['opcode']) {
+                    case WebSocketFrame::OPCODE_CLOSE:
+                        return $parser->result();
+                    case WebSocketFrame::OPCODE_PING:
+                        fwrite($socket, WebSocketFrame::encode($frame['payload'], WebSocketFrame::OPCODE_PONG));
+                        break;
+                    case WebSocketFrame::OPCODE_BINARY:
+                    case WebSocketFrame::OPCODE_TEXT:
+                        $message = $frame['payload'];
+                        break;
+                    case WebSocketFrame::OPCODE_CONTINUATION:
+                        $message = ($message ?? '').$frame['payload'];
+                        break;
                 }
 
-                if ($frame['opcode'] === WebSocketFrame::OPCODE_BINARY
-                    || $frame['opcode'] === WebSocketFrame::OPCODE_CONTINUATION) {
-                    $parser->feed($frame['payload']);
+                if ($message !== null && $frame['fin'] && $frame['opcode'] < WebSocketFrame::OPCODE_CLOSE) {
+                    $parser->feed($message);
+                    $message = null;
                 }
             }
+
+            $chunk = feof($socket) ? false : fread($socket, 8192);
+
+            if ($chunk === false || $chunk === '') {
+                return $parser->result();
+            }
+
+            $buffer .= $chunk;
         }
-
-        fclose($this->socket);
-
-        return $parser->result();
     }
 }
