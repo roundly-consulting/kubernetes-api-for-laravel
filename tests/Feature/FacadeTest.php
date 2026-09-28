@@ -240,7 +240,7 @@ it('scopes the default cluster to a namespace', function (): void {
     Kubernetes::namespace('prod')->pods()->whereLabel('app', 'web')->get();
 
     Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://k8s.example/api/v1/namespaces/prod/pods?')
-        && str_contains($request->url(), 'labelSelector=app=web'));
+        && str_contains($request->url(), 'labelSelector=app%3Dweb'));
 });
 
 it('pings and reads the version of the default cluster', function (): void {

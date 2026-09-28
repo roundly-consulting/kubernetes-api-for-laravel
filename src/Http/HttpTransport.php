@@ -95,14 +95,18 @@ final class HttpTransport implements Transport
     }
 
     /**
-     * Repeated keys (`command=a&command=b`) are sent unindexed, as the apiserver expects.
+     * RFC 3986-encoded, so a selector value can never add a parameter (`&`), turn into
+     * a space (`+`) or end the query (`#`). Repeated keys (`command=a&command=b`) are
+     * sent unindexed, as the apiserver expects.
      *
      * @param  array<string, mixed>  $query
      */
     private function queryString(array $query): string
     {
-        return urldecode(
-            (string) preg_replace('/%5B(?:[0-9]|[1-9][0-9]+)%5D=/', '=', http_build_query($query))
+        return (string) preg_replace(
+            '/%5B(?:[0-9]|[1-9][0-9]+)%5D=/',
+            '=',
+            http_build_query($query, '', '&', PHP_QUERY_RFC3986),
         );
     }
 }

@@ -40,7 +40,7 @@ trait CanExec
             $query['container'] = $container;
         }
 
-        $queryString = http_build_query($query);
+        $queryString = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
 
         foreach ($command as $argument) {
             $queryString .= '&command='.rawurlencode($argument);

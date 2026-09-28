@@ -350,7 +350,7 @@ too. Cluster-scoped kinds (nodes, namespaces, cluster roles, …) are unaffected
 ```php
 $shop = Kubernetes::namespace('shop');           // or Kubernetes::cluster('production')->namespace('shop')
 
-$shop->pods()->whereLabel('app', 'web')->get();  // GET /api/v1/namespaces/shop/pods?labelSelector=app=web
+$shop->pods()->whereLabel('app', 'web')->get();  // GET /api/v1/namespaces/shop/pods?labelSelector=app%3Dweb
 $shop->pods()->setNamespace('kube-system');      // NamespaceScopeException
 ```
 
