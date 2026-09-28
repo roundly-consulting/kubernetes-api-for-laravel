@@ -28,8 +28,10 @@ beforeEach(function (): void {
  * skill's "remote-API resource clients" shape), and every one of them is reached
  * through the manager's native return types.
  */
-it('documents its root', function (): void {
-    expect(Kubernetes::class)->toDocumentItsRoot();
+it('documents its root and is fakeable', function (): void {
+    expect(Kubernetes::class)
+        ->toDocumentItsRoot()
+        ->toBeFakeable();
 });
 
 it('resolves the default cluster from config', function (): void {

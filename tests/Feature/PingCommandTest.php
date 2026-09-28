@@ -71,6 +71,14 @@ it('fails when the apiserver is unreachable', function () {
         ->assertFailed();
 });
 
+it('is answered by the fake', function () {
+    Kubernetes::fake()->stubVersion('v1.31.4');
+
+    $this->artisan('kubernetes:ping')
+        ->expectsOutputToContain('v1.31.4')
+        ->assertSuccessful();
+});
+
 it('routes the ping probe through the cluster rate limiter', function () {
     Kubernetes::registerCluster('orbstack', fn (Cluster $cluster): Cluster => $cluster->url('https://127.0.0.1:26443')->withoutSslVerification());
 

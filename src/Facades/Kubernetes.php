@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Facades;
 
+use Illuminate\Container\Container;
 use Illuminate\Support\Facades\Facade;
 use RoundlyConsulting\KubernetesApi\Cluster;
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\ExecResult;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubeConfig;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\VersionInfo;
 use RoundlyConsulting\KubernetesApi\KubernetesManager;
 use RoundlyConsulting\KubernetesApi\Resources;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
+use RoundlyConsulting\KubernetesApi\Testing\KubernetesFake;
+use RoundlyConsulting\KubernetesApi\Testing\RecordedRequest;
 
 /**
  * @method static Cluster cluster(?string $name = null)
@@ -59,11 +63,53 @@ use RoundlyConsulting\KubernetesApi\Resources\Resource;
  * @method static Resources\TraefikServersTransport traefikServersTransports()
  * @method static Resources\TraefikTlsOption traefikTlsOptions()
  * @method static Resources\TraefikTlsStore traefikTlsStores()
+ * @method static KubernetesFake seed(string $resource, list<array<string, mixed>|Resource> $items, ?string $cluster = null)
+ * @method static KubernetesFake seedLogs(string $pod, string $logs, string $namespace = 'default', ?string $cluster = null)
+ * @method static KubernetesFake stubExec(ExecResult|\Closure(RecordedRequest): ExecResult $result)
+ * @method static KubernetesFake stubVersion(VersionInfo|string $version)
+ * @method static KubernetesFake unreachable(bool $unreachable = true)
+ * @method static list<RecordedRequest> recorded(?\Closure(RecordedRequest): bool $filter = null)
+ * @method static void assertSent(\Closure(RecordedRequest): bool $callback)
+ * @method static void assertNothingSent()
+ * @method static void assertCreated(string $resource, string|(\Closure(RecordedRequest): bool)|null $constraint = null)
+ * @method static void assertNothingCreated()
+ * @method static void assertUpdated(string $resource, string|(\Closure(RecordedRequest): bool)|null $constraint = null)
+ * @method static void assertNothingUpdated()
+ * @method static void assertPatched(string $resource, string|(\Closure(RecordedRequest): bool)|null $constraint = null)
+ * @method static void assertNothingPatched()
+ * @method static void assertScaled(string $resource, string $name, ?int $replicas = null)
+ * @method static void assertNothingScaled()
+ * @method static void assertRestarted(string $resource, string $name)
+ * @method static void assertNothingRestarted()
+ * @method static void assertDeleted(string $resource, string|(\Closure(RecordedRequest): bool)|null $constraint = null)
+ * @method static void assertNothingDeleted()
+ * @method static void assertExecuted(string $pod, ?list<string> $command = null)
+ * @method static void assertNothingExecuted()
  *
  * @see KubernetesManager
  */
 final class Kubernetes extends Facade
 {
+    /**
+     * Swap the manager — behind the facade and in the container — for an in-memory
+     * apiserver that records every request and never touches the network. Clusters
+     * registered before the swap carry over.
+     */
+    public static function fake(): KubernetesFake
+    {
+        $app = self::getFacadeApplication();
+        $current = self::getFacadeRoot();
+
+        $fake = new KubernetesFake(
+            $app ?? Container::getInstance(),
+            $current instanceof KubernetesManager ? $current : null,
+        );
+
+        self::swap($fake);
+
+        return $fake;
+    }
+
     protected static function getFacadeAccessor(): string
     {
         return KubernetesManager::class;
