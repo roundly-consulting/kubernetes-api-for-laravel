@@ -236,14 +236,14 @@ The facade is sugar over `RoundlyConsulting\KubernetesApi\KubernetesManager`, a 
 singleton. Inject it for the same API:
 
 ```php
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\Scale;
 use RoundlyConsulting\KubernetesApi\KubernetesManager;
-use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 
 final class ScaleCheckout
 {
     public function __construct(private KubernetesManager $kubernetes) {}
 
-    public function __invoke(int $replicas): Deployment
+    public function __invoke(int $replicas): Scale
     {
         return $this->kubernetes->cluster('production')
             ->deployments()
@@ -499,8 +499,9 @@ $cluster->deployments()->withName('checkout')
         'spec' => ['replicas' => 3],
     ], force: true));
 
-// Scale via the /scale subresource.
-$cluster->deployments()->withName('checkout')->scale(5);
+// Scale via the /scale subresource. Returns the apiserver's Scale answer (a DTO), not the
+// Deployment: $scale->replicas (desired), ->currentReplicas (observed), ->selector.
+$scale = $cluster->deployments()->withName('checkout')->scale(5);
 
 // Roll the pods by stamping the restartedAt annotation (like `kubectl rollout restart`).
 $cluster->deployments()->withName('checkout')->rolloutRestart();

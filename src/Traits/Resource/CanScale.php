@@ -5,16 +5,18 @@ declare(strict_types=1);
 namespace RoundlyConsulting\KubernetesApi\Traits\Resource;
 
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubernetesPatch;
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\Scale;
 
 trait CanScale
 {
     /**
      * Set the desired replica count via the `/scale` subresource using a
-     * strategic-merge patch, instead of a full read-modify-write `update()`.
+     * merge patch, instead of a full read-modify-write `update()`. Returns the
+     * apiserver's `Scale` answer (desired and observed replicas), not the workload.
      *
      * @param  array<string, mixed>  $query
      */
-    public function scale(int $replicas, array $query = ['pretty' => 1]): static
+    public function scale(int $replicas, array $query = ['pretty' => 1]): Scale
     {
         $patch = KubernetesPatch::merge(['spec' => ['replicas' => $replicas]]);
 
@@ -26,8 +28,9 @@ trait CanScale
             contentType: $patch->type->contentType(),
         );
 
-        return $this
-            ->newInstance((array) $response->json())
-            ->markAsExisting();
+        /** @var array<string, mixed> $payload */
+        $payload = (array) $response->json();
+
+        return Scale::fromResponse($payload);
     }
 }

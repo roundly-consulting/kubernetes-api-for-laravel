@@ -9,6 +9,7 @@ use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\ExecResult;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubernetesPatch;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\PodLogOptions;
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\Scale;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\VersionInfo;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\WatchEvent;
 use RoundlyConsulting\KubernetesApi\Exceptions\InvalidResourceException;
@@ -253,8 +254,12 @@ it('scales and reads the scale subresource', function (): void {
 
     $scale = Kubernetes::deployments()->setName('web')->scale(5);
 
-    expect($scale->getKind())->toBe('Scale')
-        ->and($scale->getAttribute('spec.replicas'))->toBe(5)
+    expect($scale)->toBeInstanceOf(Scale::class)
+        ->and($scale->name)->toBe('web')
+        ->and($scale->namespace)->toBe('default')
+        ->and($scale->replicas)->toBe(5)
+        ->and($scale->currentReplicas)->toBe(5)
+        ->and($scale->resourceVersion)->not->toBeNull()
         ->and(Kubernetes::deployments()->setName('web')->find()->getReplicas())->toBe(5)
         ->and(Kubernetes::cluster()->request('GET', '/apis/apps/v1/namespaces/default/deployments/web/scale')->json('spec.replicas'))->toBe(5);
 

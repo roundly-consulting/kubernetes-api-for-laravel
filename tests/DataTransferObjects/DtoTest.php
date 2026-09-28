@@ -6,6 +6,7 @@ use RoundlyConsulting\KubernetesApi\DataTransferObjects\ExecResult;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubeConfig;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubernetesPatch;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\PodLogOptions;
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\Scale;
 use RoundlyConsulting\KubernetesApi\Enums\PatchType;
 
 it('builds each patch type with the right content type and encoded body', function () {
@@ -51,4 +52,10 @@ it('reports exec success based on the exit code', function () {
 it('reports whether a kubeconfig carries a client certificate', function () {
     expect((new KubeConfig(server: 'https://x', clientCertificatePath: '/c', clientKeyPath: '/k'))->hasClientCertificate())->toBeTrue()
         ->and((new KubeConfig(server: 'https://x', token: 't'))->hasClientCertificate())->toBeFalse();
+});
+
+it('maps a Scale payload and tolerates missing fields', function () {
+    expect(Scale::fromResponse([]))->toEqual(new Scale(name: '', namespace: null, replicas: 0, currentReplicas: 0))
+        ->and(Scale::fromResponse(['metadata' => ['name' => 'web'], 'spec' => ['replicas' => '3'], 'status' => ['replicas' => 2]]))
+        ->toEqual(new Scale(name: 'web', namespace: null, replicas: 3, currentReplicas: 2));
 });

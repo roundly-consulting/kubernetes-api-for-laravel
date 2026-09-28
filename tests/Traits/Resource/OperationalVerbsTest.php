@@ -9,6 +9,7 @@ use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubernetesPatch;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\PodLogOptions;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\ResourcePage;
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\Scale;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\WatchEvent;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 use RoundlyConsulting\KubernetesApi\Resources\Pod;
@@ -81,9 +82,24 @@ it('appends dryRun=All when dry run is enabled', function () {
 });
 
 it('scales via the scale subresource using a merge patch', function () {
-    Http::fake(['*' => Http::response(['spec' => ['replicas' => 5]])]);
+    Http::fake(['*' => Http::response([
+        'kind' => 'Scale',
+        'apiVersion' => 'autoscaling/v1',
+        'metadata' => ['name' => 'checkout', 'namespace' => 'production', 'resourceVersion' => '42'],
+        'spec' => ['replicas' => 5],
+        'status' => ['replicas' => 3, 'selector' => 'app=checkout'],
+    ])]);
 
-    $this->deployment->scale(5);
+    $scale = $this->deployment->scale(5);
+
+    expect($scale)->toEqual(new Scale(
+        name: 'checkout',
+        namespace: 'production',
+        replicas: 5,
+        currentReplicas: 3,
+        selector: 'app=checkout',
+        resourceVersion: '42',
+    ))->and($this->deployment->getKind())->toBe('Deployment');
 
     Http::assertSent(fn (Request $r) => $r->method() === 'PATCH'
         && $r->hasHeader('Content-Type', 'application/merge-patch+json')
