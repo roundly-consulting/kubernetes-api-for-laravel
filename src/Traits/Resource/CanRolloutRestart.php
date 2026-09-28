@@ -33,7 +33,7 @@ trait CanRolloutRestart
         $response = $this->request(
             method: 'PATCH',
             path: $this->getResourcePath(),
-            query: $this->withDryRun($query),
+            query: $this->withFieldManager($this->withDryRun($query)),
             payload: $patch->encode(),
             contentType: $patch->type->contentType(),
         );

@@ -14,8 +14,8 @@ trait HasManagerName
     }
 
     /**
-     * A copy carrying the field-manager name — sent as the user agent and used to key
-     * the cluster's rate-limit budget.
+     * A copy carrying the field-manager name — sent as `fieldManager` on every write
+     * (create, update, patch, scale, rollout restart) and as the user agent.
      */
     public function withManagerName(?string $managerName): static
     {

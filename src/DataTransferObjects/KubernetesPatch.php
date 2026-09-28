@@ -11,6 +11,10 @@ use RoundlyConsulting\KubernetesApi\Enums\PatchType;
  * A patch request to apply to a Kubernetes resource. The body is encoded as
  * JSON for every strategy (server-side apply accepts a JSON body under the
  * `apply-patch+yaml` content type, since JSON is valid YAML).
+ *
+ * `force` only means something to a server-side apply — it takes over fields another
+ * manager owns instead of answering 409 — and is never sent with another type (the
+ * apiserver forbids it there).
  */
 final readonly class KubernetesPatch
 {
@@ -18,6 +22,7 @@ final readonly class KubernetesPatch
     public function __construct(
         public PatchType $type,
         public array $body,
+        public bool $force = false,
     ) {}
 
     /** @param array<string, mixed> $body */
@@ -38,10 +43,24 @@ final readonly class KubernetesPatch
         return new self(PatchType::Json, $operations);
     }
 
-    /** @param array<string, mixed> $body */
-    public static function apply(array $body): self
+    /**
+     * A server-side apply of a (partial) manifest. The apiserver requires a field
+     * manager for it: the cluster's manager name, else `kubernetes-api-for-laravel`.
+     *
+     * @param  array<string, mixed>  $body
+     * @param  bool  $force  take over conflicting fields owned by another manager
+     */
+    public static function apply(array $body, bool $force = false): self
     {
-        return new self(PatchType::Apply, $body);
+        return new self(PatchType::Apply, $body, $force);
+    }
+
+    /**
+     * Whether `force=true` goes on the request — only ever for a server-side apply.
+     */
+    public function forces(): bool
+    {
+        return $this->force && $this->type === PatchType::Apply;
     }
 
     /** @throws JsonException */

@@ -233,7 +233,7 @@ it('makes post request to create specific resource', function () {
         ->toBe('production');
 
     Http::assertSent(function (Request $request) {
-        return $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments?pretty=1' &&
+        return $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments?pretty=1&fieldManager=Pest%20Tests' &&
                $request->method() === 'POST' &&
                $request->isJson() &&
                $request->hasHeader('Authorization', 'Bearer secret') &&
@@ -274,7 +274,7 @@ it('makes put request to update specific resource', function () {
         ->toBe(2);
 
     Http::assertSent(function (Request $request) {
-        return $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/api-deployment?pretty=1' &&
+        return $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/api-deployment?pretty=1&fieldManager=Pest%20Tests' &&
                $request->method() === 'PUT' &&
                $request->isJson() &&
                $request->hasHeader('Authorization', 'Bearer secret') &&
@@ -347,7 +347,7 @@ it('updates or creates resource based on existence - create', function () {
         && $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/api-deployment?pretty=1');
 
     Http::assertSent(fn (Request $request) => $request->method() === 'POST'
-        && $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments?pretty=1');
+        && $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments?pretty=1&fieldManager=Pest%20Tests');
 });
 
 it('updates or creates resource based on existence - update carries resourceVersion', function () {
@@ -372,7 +372,7 @@ it('updates or creates resource based on existence - update carries resourceVers
         ->wasRecentlyCreated()->toBeFalse();
 
     Http::assertSent(fn (Request $request) => $request->method() === 'PUT'
-        && $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/api-deployment?pretty=1'
+        && $request->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/api-deployment?pretty=1&fieldManager=Pest%20Tests'
         && $request->data()['metadata']['resourceVersion'] === '4242');
 });
 

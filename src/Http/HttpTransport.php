@@ -37,8 +37,13 @@ final class HttpTransport implements Transport
         }
 
         $request = Http::baseUrl($cluster->getUrl())
-            ->withUserAgent((string) $cluster->getManagerName())
             ->withHeaders(['Accept-Encoding' => 'gzip, deflate']);
+
+        $manager = $cluster->getManagerName();
+
+        if ($manager !== null && $manager !== '') {
+            $request->withUserAgent($manager);
+        }
 
         $this->authenticate($request, $cluster);
 

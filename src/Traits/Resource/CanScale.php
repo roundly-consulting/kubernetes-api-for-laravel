@@ -21,7 +21,7 @@ trait CanScale
         $response = $this->request(
             method: 'PATCH',
             path: $this->getSubresourcePath('scale'),
-            query: $this->withDryRun($query),
+            query: $this->withFieldManager($this->withDryRun($query)),
             payload: $patch->encode(),
             contentType: $patch->type->contentType(),
         );

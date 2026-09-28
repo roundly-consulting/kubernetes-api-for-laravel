@@ -163,7 +163,7 @@ return [
 | `clusters.<name>.verify` | `bool` | `true` (`KUBERNETES_VERIFY_SSL`) | TLS verification. Only turn off for local development. |
 | `clusters.<name>.kubeconfig` / `context` | `string\|null` | `null` | For the `kubeconfig` source: the file (null = `KUBECONFIG` or `~/.kube/config`) and context (null = `current-context`). |
 | `clusters.<name>.namespace` | `string` | `default` (`KUBERNETES_NAMESPACE`) | The default namespace for namespaced resources on this cluster. |
-| `clusters.<name>.manager` | `string\|null` | `null` (`KUBERNETES_MANAGER`) | The field manager / user agent; also keys the cluster's rate-limit budget. |
+| `clusters.<name>.manager` | `string\|null` | `null` (`KUBERNETES_MANAGER`) | Your app's field manager, sent as `fieldManager` on every write and as the user agent. A server-side apply without one uses `kubernetes-api-for-laravel`. |
 | `client.options` | `array<string, mixed>` | `['timeout' => 5]` | Laravel HTTP client options merged into every request the package sends (timeout, proxy, etc.). The `timeout` bounds ordinary requests only. Streams (watches, `streamLogs()`, `exec()`) ignore it. |
 | `client.stream_timeout` | `int` (seconds) | `0` (`KUBERNETES_STREAM_TIMEOUT`) | Idle timeout for streams: after this many seconds of silence a watch or log follow ends cleanly, and an unfinished `exec()` reports no exit code. `0` waits indefinitely, like kubectl. The apiserver still closes a watch after its own timeout. |
 | `rate_limits.enabled` | `bool` | `true` (`KUBERNETES_RATELIMIT_ENABLED`) | Toggle client-side rate limiting. `false` sends raw, unthrottled requests. |
@@ -281,10 +281,15 @@ $cluster = Kubernetes::url('https://api.my-cluster.example:6443')
     ->withPrivateKey('/path/to/client.key')
     ->withCaCertificate('/path/to/ca.crt')
     ->withSslVerification()
-    ->withManagerName('MyApp'); // the field manager on resources this app manages
+    ->withManagerName('my-app'); // the field manager on resources this app writes
 
 $cluster->withToken('other');   // returns a copy — $cluster still uses 'service-account-token'
 ```
+
+The manager name is sent as the `fieldManager` query parameter on every create, update, patch,
+scale and rollout restart, so `managedFields` records your app as the owner of what it wrote. It
+is also sent as the `User-Agent`. A server-side apply needs a field manager, so without a manager
+name it falls back to `kubernetes-api-for-laravel`.
 
 `Kubernetes::url()` starts from a blank client: it inherits nothing — no token, no
 certificate — from the default cluster. For local development you can skip the certificates
@@ -480,9 +485,19 @@ $cluster->pods()->each(function ($pod): void {
 ```php
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubernetesPatch;
 
-// Targeted patches (strategic-merge / merge / JSON Patch / server-side apply).
+// Targeted patches (strategic-merge / merge / JSON Patch).
 $cluster->deployments()->withName('checkout')
     ->patch(KubernetesPatch::merge(['spec' => ['paused' => true]]));
+
+// Server-side apply: sent with your manager name as fieldManager. force: true takes over
+// fields another manager owns instead of failing with a 409 conflict.
+$cluster->deployments()->withName('checkout')
+    ->patch(KubernetesPatch::apply([
+        'apiVersion' => 'apps/v1',
+        'kind' => 'Deployment',
+        'metadata' => ['name' => 'checkout'],
+        'spec' => ['replicas' => 3],
+    ], force: true));
 
 // Scale via the /scale subresource.
 $cluster->deployments()->withName('checkout')->scale(5);
@@ -826,8 +841,9 @@ $fake->assertCreated('configMaps', fn (RecordedRequest $request): bool => $reque
 
 Clusters registered before `fake()` carry over, and their definitions still run; under the fake
 `fromKubeConfig()` / `inCluster()` (and `kubeconfig` / `in-cluster` config sources) never read
-credentials. Approximations: strategic-merge and server-side-apply patches are applied as JSON
-merge patches, and logs/exec answer for any pod. Clusters built without the manager
+credentials. Like the apiserver, the fake answers a server-side apply without `fieldManager`, or
+`force` on any other patch type, with a 422. Approximations: strategic-merge and
+server-side-apply patches are applied as JSON merge patches, and logs/exec answer for any pod. Clusters built without the manager
 (`new Cluster`, `Cluster::make()`) bypass the fake.
 
 ## Testing

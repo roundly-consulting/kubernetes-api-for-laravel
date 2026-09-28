@@ -100,7 +100,7 @@ final class FakeTransport implements Transport
             RequestVerb::Logs => $this->logs($partition, $api, $query),
             RequestVerb::Create => $this->create($partition, $api, $decoded, $request->isDryRun()),
             RequestVerb::Update => $this->update($partition, $api, $decoded, $request->isDryRun()),
-            RequestVerb::Patch => $this->patch($partition, $api, $decoded, $contentType, $request->isDryRun()),
+            RequestVerb::Patch => $this->patch($partition, $api, $decoded, $contentType, $query, $request->isDryRun()),
             RequestVerb::Delete => $this->delete($partition, $api, $request->isDryRun()),
             default => $this->status(404, 'NotFound', "the server could not find the requested resource ({$method} {$path})"),
         };
@@ -324,9 +324,23 @@ final class FakeTransport implements Transport
         return $this->store($partition, $api, $body, $dryRun);
     }
 
-    /** @param array<array-key, mixed> $body */
-    private function patch(string $partition, ApiPath $api, array $body, ?string $contentType, bool $dryRun): Response
+    /**
+     * @param  array<array-key, mixed>  $body
+     * @param  array<string, mixed>  $query
+     */
+    private function patch(string $partition, ApiPath $api, array $body, ?string $contentType, array $query, bool $dryRun): Response
     {
+        // The apiserver validates PatchOptions before it looks the object up.
+        $apply = $contentType === PatchType::Apply->contentType();
+
+        if ($apply && in_array($query['fieldManager'] ?? null, [null, ''], true)) {
+            return $this->status(422, 'Invalid', 'PatchOptions.meta.k8s.io "" is invalid: fieldManager: Required value: is required for apply patch');
+        }
+
+        if (! $apply && array_key_exists('force', $query)) {
+            return $this->status(422, 'Invalid', 'PatchOptions.meta.k8s.io "" is invalid: force: Forbidden: may not be specified for non-apply patch');
+        }
+
         $current = $this->find($partition, $api);
 
         if ($current === null) {

@@ -9,6 +9,7 @@ use Illuminate\Http\Client\Response;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubernetesPatch;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\ResourcePage;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\WatchEvent;
+use RoundlyConsulting\KubernetesApi\Enums\PatchType;
 use RoundlyConsulting\KubernetesApi\Exceptions\KubernetesException;
 use RoundlyConsulting\KubernetesApi\Http\StreamLines;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
@@ -20,6 +21,12 @@ trait ExecutesClusterOperations
     use HasCluster;
     use HasClusterPaths;
     use HasListing;
+
+    /**
+     * The field manager a server-side apply falls back to when the cluster has no
+     * manager name (`withManagerName()` / `clusters.<name>.manager`).
+     */
+    public const string DEFAULT_FIELD_MANAGER = 'kubernetes-api-for-laravel';
 
     protected bool $dryRun = false;
 
@@ -110,7 +117,7 @@ trait ExecutesClusterOperations
         $response = $this->request(
             method: 'POST',
             path: $this->getResourceListingPath(),
-            query: $this->withDryRun($query),
+            query: $this->withFieldManager($this->withDryRun($query)),
             payload: $this->payload(),
         );
 
@@ -126,7 +133,7 @@ trait ExecutesClusterOperations
         $response = $this->request(
             method: 'PUT',
             path: $this->getResourcePath(),
-            query: $this->withDryRun($query),
+            query: $this->withFieldManager($this->withDryRun($query)),
             payload: $this->payload(),
         );
 
@@ -160,13 +167,24 @@ trait ExecutesClusterOperations
         return $this->update($query);
     }
 
-    /** @param array<string, mixed> $query */
+    /**
+     * Patch the resource. A server-side apply (`KubernetesPatch::apply()`) always
+     * carries a `fieldManager`, and `force=true` when the patch asks for it.
+     *
+     * @param  array<string, mixed>  $query
+     */
     public function patch(KubernetesPatch $patch, array $query = ['pretty' => 1]): static
     {
+        $query = $this->withFieldManager($this->withDryRun($query), required: $patch->type === PatchType::Apply);
+
+        if ($patch->forces()) {
+            $query['force'] = 'true';
+        }
+
         $response = $this->request(
             method: 'PATCH',
             path: $this->getResourcePath(),
-            query: $this->withDryRun($query),
+            query: $query,
             payload: $patch->encode(),
             contentType: $patch->type->contentType(),
         );
@@ -284,6 +302,29 @@ trait ExecutesClusterOperations
         if (is_string($version)) {
             $this->setAttribute('metadata.resourceVersion', $version);
         }
+    }
+
+    /**
+     * Name the field manager `managedFields` records for a write: the cluster's manager
+     * name. A server-side apply cannot go without one, so there it falls back to the
+     * package's own name. A `fieldManager` already in the query wins.
+     *
+     * @param  array<string, mixed>  $query
+     * @return array<string, mixed>
+     */
+    protected function withFieldManager(array $query, bool $required = false): array
+    {
+        $manager = $this->requireCluster()->getManagerName();
+
+        if ($manager === null || $manager === '') {
+            $manager = $required ? self::DEFAULT_FIELD_MANAGER : null;
+        }
+
+        if ($manager !== null) {
+            $query['fieldManager'] ??= $manager;
+        }
+
+        return $query;
     }
 
     /**

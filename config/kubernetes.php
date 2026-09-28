@@ -19,8 +19,9 @@ return [
      *  - `kubeconfig` — a kubeconfig file (`kubeconfig`, null = KUBECONFIG or
      *                   ~/.kube/config) and `context` (null = current-context);
      *  - `in-cluster` — the service account mounted into the pod.
-     * `namespace` is the default for namespaced resources; `manager` is the field
-     * manager / user agent (and keys the cluster's rate-limit budget). Clusters
+     * `namespace` is the default for namespaced resources; `manager` is your app's
+     * field manager, sent as `fieldManager` on every write (a server-side apply
+     * without one uses `kubernetes-api-for-laravel`) and as the user agent. Clusters
      * registered with `Kubernetes::registerCluster()` override entries of the same name.
      */
     'clusters' => [

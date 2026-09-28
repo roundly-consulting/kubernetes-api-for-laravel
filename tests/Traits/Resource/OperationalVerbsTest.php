@@ -69,7 +69,7 @@ it('patches a resource with the right content type and body', function () {
     Http::assertSent(fn (Request $r) => $r->method() === 'PATCH'
         && $r->hasHeader('Content-Type', 'application/merge-patch+json')
         && $r->body() === '{"spec":{"paused":true}}'
-        && $r->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/checkout?pretty=1');
+        && $r->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/checkout?pretty=1&fieldManager=Pest%20Tests');
 });
 
 it('appends dryRun=All when dry run is enabled', function () {
@@ -87,7 +87,7 @@ it('scales via the scale subresource using a merge patch', function () {
 
     Http::assertSent(fn (Request $r) => $r->method() === 'PATCH'
         && $r->hasHeader('Content-Type', 'application/merge-patch+json')
-        && $r->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/checkout/scale?pretty=1'
+        && $r->url() === 'https://localhost/apis/apps/v1/namespaces/production/deployments/checkout/scale?pretty=1&fieldManager=Pest%20Tests'
         && $r->body() === '{"spec":{"replicas":5}}');
 });
 
