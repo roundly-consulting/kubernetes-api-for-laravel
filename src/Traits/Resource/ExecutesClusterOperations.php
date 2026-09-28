@@ -10,6 +10,7 @@ use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubernetesPatch;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\ResourcePage;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\WatchEvent;
 use RoundlyConsulting\KubernetesApi\Exceptions\KubernetesException;
+use RoundlyConsulting\KubernetesApi\Http\StreamLines;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
 use RoundlyConsulting\KubernetesApi\Resources\ResourcesCollection;
 use RoundlyConsulting\KubernetesApi\Resources\Types\Type;
@@ -232,7 +233,9 @@ trait ExecutesClusterOperations
 
     /**
      * Stream a watch over the listing, invoking the callback with a
-     * {@see WatchEvent} for every change until the connection ends.
+     * {@see WatchEvent} for every change until the connection ends — the apiserver
+     * closes a watch after its own timeout, or the idle
+     * `kubernetes.client.stream_timeout` passes (none by default).
      *
      * @param  callable(WatchEvent): mixed  $onEvent
      * @param  array<string, mixed>  $query
@@ -249,29 +252,19 @@ trait ExecutesClusterOperations
             stream: true,
         );
 
-        $body = $response->toPsrResponse()->getBody();
-
-        $buffer = '';
-
-        while (! $body->eof()) {
-            $buffer .= $body->read(8192);
-
-            while (($newline = strpos($buffer, "\n")) !== false) {
-                $line = substr($buffer, 0, $newline);
-                $buffer = substr($buffer, $newline + 1);
-
-                if (trim($line) === '') {
-                    continue;
-                }
-
-                /** @var array{type?: string, object?: array<string, mixed>} $decoded */
-                $decoded = (array) json_decode($line, true);
-
-                $onEvent(new WatchEvent(
-                    type: is_string($decoded['type'] ?? null) ? $decoded['type'] : 'UNKNOWN',
-                    object: $this->newInstance((array) ($decoded['object'] ?? []))->markAsExisting(),
-                ));
+        // Only complete lines are events: a partial one left by an idle timeout is dropped.
+        foreach (StreamLines::of($response->toPsrResponse()->getBody(), withTrailing: false) as $line) {
+            if (trim($line) === '') {
+                continue;
             }
+
+            /** @var array{type?: string, object?: array<string, mixed>} $decoded */
+            $decoded = (array) json_decode($line, true);
+
+            $onEvent(new WatchEvent(
+                type: is_string($decoded['type'] ?? null) ? $decoded['type'] : 'UNKNOWN',
+                object: $this->newInstance((array) ($decoded['object'] ?? []))->markAsExisting(),
+            ));
         }
     }
 

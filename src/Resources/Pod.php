@@ -6,6 +6,7 @@ namespace RoundlyConsulting\KubernetesApi\Resources;
 
 use Generator;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\PodLogOptions;
+use RoundlyConsulting\KubernetesApi\Http\StreamLines;
 use RoundlyConsulting\KubernetesApi\Resources\Types\Container;
 use RoundlyConsulting\KubernetesApi\Resources\Types\ContainerStatus;
 use RoundlyConsulting\KubernetesApi\Resources\Types\Volume;
@@ -44,7 +45,9 @@ class Pod extends Resource
 
     /**
      * Stream the pod's logs line by line. Pair with `follow: true` to tail a
-     * running container; the generator yields each log line as it arrives.
+     * running container; the generator yields each log line as it arrives and ends
+     * when the container stops logging for good, or when the idle
+     * `kubernetes.client.stream_timeout` passes (none by default).
      *
      * @return Generator<int, string>
      */
@@ -60,21 +63,7 @@ class Pod extends Resource
             stream: true,
         );
 
-        $body = $response->toPsrResponse()->getBody();
-        $buffer = '';
-
-        while (! $body->eof()) {
-            $buffer .= $body->read(8192);
-
-            while (($newline = strpos($buffer, "\n")) !== false) {
-                yield substr($buffer, 0, $newline);
-                $buffer = substr($buffer, $newline + 1);
-            }
-        }
-
-        if ($buffer !== '') {
-            yield $buffer;
-        }
+        yield from StreamLines::of($response->toPsrResponse()->getBody());
     }
 
     /** @param array<int, Container> $containers */
