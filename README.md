@@ -357,6 +357,19 @@ $shop->pods()->setNamespace('kube-system');      // NamespaceScopeException
 A `namespace` on a `clusters` entry (or `withDefaultNamespace()`) is only a default; `namespace()`
 is the boundary.
 
+Names can't get around it either. Before a request is sent, every value that goes into the URL
+path is checked:
+
+- **Names** must be a single path segment: not `.` or `..`, and no `/`, `%` or whitespace. They
+  are also percent-encoded.
+- **Namespaces** must be valid DNS-1123 labels.
+- **Plurals and apiVersions** must match their Kubernetes grammar.
+
+Anything else throws `InvalidResourceException` and nothing is sent. So
+`withName('../../kube-system/secrets/admin-token')` can't leave `shop`. The raw
+`request($method, $path)` escape hatch is the exception: it sends the path you give it exactly as
+written and is not scoped.
+
 ### Registering custom resources (CRDs)
 
 Define a resource class and register it either in `config/kubernetes.php` or at runtime:
@@ -686,7 +699,7 @@ The package's other exceptions, all under `RoundlyConsulting\KubernetesApi\Excep
 | `ClusterNotFoundException` | `cluster($name)` for a name that is neither configured nor registered |
 | `ClusterConfigurationException` | a cluster has no URL, a definition closure returns no `Cluster`, a config `source` is unknown, or a resource is used without a cluster |
 | `NamespaceScopeException` | a namespace-scoped client or resource is asked to leave its namespace (`->scope` names it) |
-| `InvalidResourceException` | `registerResource()` / `seed()` get a class that is not a resource or an unusable name |
+| `InvalidResourceException` | `registerResource()` / `seed()` get a class that is not a resource or an unusable name, or a request's name, namespace, plural or apiVersion cannot be a single URL path segment (nothing is sent) |
 | `RateLimitExceededException` | the client-side budget is exhausted and `max_wait` is set (see below) |
 | `KubeConfigException` | a kubeconfig or the in-cluster credentials cannot be read |
 | `WebSocketException` | the exec WebSocket fails |

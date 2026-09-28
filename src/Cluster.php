@@ -14,11 +14,13 @@ use RoundlyConsulting\KubernetesApi\DataTransferObjects\ExecResult;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubeConfig;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\VersionInfo;
 use RoundlyConsulting\KubernetesApi\Exceptions\ClusterConfigurationException;
+use RoundlyConsulting\KubernetesApi\Exceptions\InvalidResourceException;
 use RoundlyConsulting\KubernetesApi\Exceptions\KubernetesException;
 use RoundlyConsulting\KubernetesApi\Exceptions\NamespaceScopeException;
 use RoundlyConsulting\KubernetesApi\Http\HttpTransport;
 use RoundlyConsulting\KubernetesApi\Http\Transport;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
+use RoundlyConsulting\KubernetesApi\Support\PathSegment;
 use RoundlyConsulting\KubernetesApi\Support\ResourceRegistry;
 use RoundlyConsulting\KubernetesApi\Traits\HasAuthentication;
 use RoundlyConsulting\KubernetesApi\Traits\HasManagerName;
@@ -85,9 +87,12 @@ final class Cluster
      * scope is a security boundary, not a default.
      *
      * @throws NamespaceScopeException when this client is already scoped to another namespace
+     * @throws InvalidResourceException when the namespace is not a valid DNS-1123 label
      */
     public function namespace(string $namespace): self
     {
+        PathSegment::namespace($namespace);
+
         if ($this->namespaceScope !== null && $this->namespaceScope !== $namespace) {
             throw NamespaceScopeException::rescope($this->namespaceScope, $namespace);
         }

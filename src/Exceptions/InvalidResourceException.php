@@ -9,7 +9,8 @@ use RoundlyConsulting\KubernetesApi\Resources\Resource;
 
 /**
  * Thrown by `Kubernetes::registerResource()` and the fake's `seed()` for a class that
- * is not a resource, or a name no cluster could ever answer.
+ * is not a resource, or a name no cluster could ever answer — and before any request
+ * whose name, namespace, plural or apiVersion cannot be a single URL path segment.
  */
 class InvalidResourceException extends InvalidArgumentException
 {
@@ -26,5 +27,21 @@ class InvalidResourceException extends InvalidArgumentException
     public static function unknown(string $resource): self
     {
         return new self("'{$resource}' is neither a resource class nor a registered resource name.");
+    }
+
+    public static function missingName(): self
+    {
+        return new self('A resource name is required for this request: call setName() first.');
+    }
+
+    /**
+     * A value that cannot be one segment of an apiserver URL path — refused before any
+     * request is sent, so it can never be routed somewhere else.
+     */
+    public static function invalidSegment(string $what, mixed $value): self
+    {
+        $shown = is_string($value) ? var_export($value, true) : get_debug_type($value);
+
+        return new self("{$shown} is not a valid {$what}.");
     }
 }
