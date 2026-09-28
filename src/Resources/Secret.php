@@ -4,28 +4,35 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Resources;
 
-use Illuminate\Support\Arr;
-
 class Secret extends Resource
 {
     protected string $kind = 'Secret';
 
     protected bool $usesNamespaces = true;
 
-    /** @return array<string, string>|string|null */
+    /**
+     * The decoded data, or one decoded value. Data keys are file names (`tls.crt`,
+     * `.dockerconfigjson`), so they are always handled as flat keys — never as dotted
+     * attribute paths. A value that is not valid base64 is returned as stored.
+     *
+     * @return array<string, string>|string|null
+     */
     public function getData(?string $key = null, ?string $default = null): null|string|array
     {
-        $data = $this->getAttribute('data', []);
+        $data = [];
 
-        foreach ($data as $dataKey => &$value) {
-            $value = base64_decode($value, true);
+        foreach ((array) $this->getAttribute('data', []) as $dataKey => $value) {
+            $value = is_scalar($value) ? (string) $value : '';
+            $decoded = base64_decode($value, true);
+
+            $data[(string) $dataKey] = $decoded === false ? $value : $decoded;
         }
 
         if (! $key) {
             return $data;
         }
 
-        return Arr::get($data, $key, $default);
+        return $data[$key] ?? $default;
     }
 
     /** @param array<string, string> $data */
@@ -40,12 +47,18 @@ class Secret extends Resource
 
     public function addData(string $name, string $value): static
     {
-        return $this->setAttribute("data.{$name}", base64_encode($value));
+        $data = (array) $this->getAttribute('data', []);
+        $data[$name] = base64_encode($value);
+
+        return $this->setAttribute('data', $data);
     }
 
     public function removeData(string $name): static
     {
-        return $this->removeAttribute("data.{$name}");
+        $data = (array) $this->getAttribute('data', []);
+        unset($data[$name]);
+
+        return $this->setAttribute('data', $data);
     }
 
     public function setType(string $type): static

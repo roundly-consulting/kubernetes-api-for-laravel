@@ -45,3 +45,12 @@ it('adds to data or removes from data', function () {
 
     expect($configMap->getData('works'))->toBeNull();
 });
+
+it('keeps dotted data keys flat', function () {
+    $cm = ConfigMap::make()->addData('nginx.conf', 'x')->addData('app.env', 'y');
+
+    expect($cm->toArray()['data'])->toBe(['nginx.conf' => 'x', 'app.env' => 'y'])
+        ->and($cm->getData('nginx.conf'))->toBe('x')
+        ->and($cm->removeData('nginx.conf')->toArray()['data'])->toBe(['app.env' => 'y'])
+        ->and(ConfigMap::make()->setData(['a' => ['b' => 'nested']])->getData('a.b', 'default'))->toBe('default');
+});

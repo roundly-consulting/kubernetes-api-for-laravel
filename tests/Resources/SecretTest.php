@@ -100,3 +100,12 @@ it('builds a kubernetes.io/tls secret from a cert and key', function () {
         ->and($secret->getData('tls.crt'))->toBe($cert)
         ->and($secret->getData('tls.key'))->toBe($key);
 });
+
+it('keeps dotted data keys flat', function () {
+    $secret = Secret::make()->addData('tls.crt', 'PEM')->addData('.dockerconfigjson', '{}');
+
+    expect($secret->toArray()['data'])->toBe(['tls.crt' => base64_encode('PEM'), '.dockerconfigjson' => base64_encode('{}')])
+        ->and($secret->getData('tls.crt'))->toBe('PEM')
+        ->and($secret->getData('.dockerconfigjson'))->toBe('{}')
+        ->and(array_keys(Secret::make()->asTlsCertificate('C', 'K')->removeData('tls.crt')->toArray()['data']))->toBe(['tls.key']);
+});

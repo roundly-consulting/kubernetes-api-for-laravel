@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Resources;
 
-use Illuminate\Support\Arr;
-
+/**
+ * Data keys are file names (`nginx.conf`, `app.env`), so they are always handled as
+ * flat keys — never as dotted attribute paths.
+ */
 class ConfigMap extends Resource
 {
     protected string $kind = 'ConfigMap';
@@ -14,13 +16,13 @@ class ConfigMap extends Resource
 
     public function getData(?string $key = null, ?string $default = null): mixed
     {
-        $data = $this->getAttribute('data', []);
+        $data = (array) $this->getAttribute('data', []);
 
         if (! $key) {
             return $data;
         }
 
-        return Arr::get($data, $key, $default);
+        return $data[$key] ?? $default;
     }
 
     /** @param array<string, string> $data */
@@ -31,11 +33,17 @@ class ConfigMap extends Resource
 
     public function addData(string $name, string $value): static
     {
-        return $this->setAttribute("data.{$name}", $value);
+        $data = (array) $this->getAttribute('data', []);
+        $data[$name] = $value;
+
+        return $this->setAttribute('data', $data);
     }
 
     public function removeData(string $name): static
     {
-        return $this->removeAttribute("data.{$name}");
+        $data = (array) $this->getAttribute('data', []);
+        unset($data[$name]);
+
+        return $this->setAttribute('data', $data);
     }
 }
