@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use RoundlyConsulting\KubernetesApi\Facades\Kubernetes as KubernetesFacade;
-use RoundlyConsulting\KubernetesApi\Kubernetes;
+use RoundlyConsulting\KubernetesApi\Cluster;
+use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 use RoundlyConsulting\KubernetesApi\Resources\Pod;
 use RoundlyConsulting\KubernetesApi\Tests\Fixtures\CustomPod;
@@ -20,13 +20,13 @@ use RoundlyConsulting\KubernetesApi\Tests\Fixtures\SwappedResourceTestCase;
  * point a name at its own class, which the package must then actually resolve.
  *
  * The swap is applied before boot by {@see SwappedResourceTestCase}, which this
- * directory is bound to — Pest binds a test case per directory, not per file. That is
- * load-bearing rather than ceremonial: the provider registers a macro per resource name
- * in `boot()`, so a runtime `config()->set()` would leave the macro bound to the
- * packaged Pod and the test would pass while proving nothing.
+ * directory is bound to — Pest binds a test case per directory, not per file: a host
+ * sets the key in its published config, so the proof sets it the same way. (The
+ * accessors read the map at call time, so a runtime registration works too — pinned in
+ * FacadeTest.)
  */
-it('resolves the host resource class through the registry macro', function (): void {
-    $cluster = new Kubernetes;
+it('resolves the host resource class through the typed accessor', function (): void {
+    $cluster = new Cluster;
 
     $pod = $cluster->pods();
 
@@ -40,7 +40,7 @@ it('resolves the host resource class through the registry macro', function (): v
  * The swap must survive the facade, which is how a host actually reaches the registry.
  */
 it('resolves the host resource class through the facade', function (): void {
-    $pod = KubernetesFacade::pods();
+    $pod = Kubernetes::pods();
 
     expect($pod::class)->toBe(CustomPod::class);
 });
@@ -51,7 +51,7 @@ it('resolves the host resource class through the facade', function (): void {
  * everything.
  */
 it('leaves an unswapped resource on the packaged class', function (): void {
-    $cluster = new Kubernetes;
+    $cluster = new Cluster;
 
     expect($cluster->deployments()::class)
         ->toBe(Deployment::class);

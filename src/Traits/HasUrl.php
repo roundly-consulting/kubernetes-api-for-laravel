@@ -8,11 +8,15 @@ trait HasUrl
 {
     protected string $url = '';
 
-    public function url(string $url): self
+    /**
+     * A copy pointed at the given apiserver URL; the receiver is left untouched.
+     */
+    public function url(string $url): static
     {
-        $this->url = $url;
+        $clone = clone $this;
+        $clone->url = $url;
 
-        return $this;
+        return $clone;
     }
 
     public function getUrl(): string

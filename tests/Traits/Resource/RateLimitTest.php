@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Http;
 use RoundlyConsulting\HttpClientRateLimits\Facades\RateLimits;
+use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\Exceptions\KubernetesException;
 use RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException;
-use RoundlyConsulting\KubernetesApi\Kubernetes;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 use RoundlyConsulting\PackageToolkit\Contracts\HasRetryAfter;
 
@@ -15,7 +15,7 @@ function clusterResource(string $manager = 'Pest Tests', string $url = 'https://
     return Deployment::make()
         ->setNamespace('production')
         ->setCluster(
-            Kubernetes::make()->url($url)->withToken('secret')->setManagerName($manager)
+            Cluster::make()->url($url)->withToken('secret')->withManagerName($manager)
         );
 }
 
@@ -136,7 +136,7 @@ it('falls back to the request host when no manager name is set', function () {
 
     Deployment::make()
         ->setNamespace('production')
-        ->setCluster(Kubernetes::make()->url('https://cluster.example.com')->withToken('secret'))
+        ->setCluster(Cluster::make()->url('https://cluster.example.com')->withToken('secret'))
         ->get();
 
     $fake->assertAllowed('k8s:app:cluster.example.com');

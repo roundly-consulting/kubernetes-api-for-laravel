@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\WebSocket;
 
+use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\ExecResult;
 use RoundlyConsulting\KubernetesApi\Exceptions\WebSocketException;
-use RoundlyConsulting\KubernetesApi\Kubernetes;
 
 /**
  * A self-contained WebSocket client for the Kubernetes exec subresource. It
@@ -27,7 +27,7 @@ final class ExecConnection
     private $socket;
 
     public function __construct(
-        private readonly Kubernetes $cluster,
+        private readonly Cluster $cluster,
         private readonly int $timeout = 30,
     ) {}
 

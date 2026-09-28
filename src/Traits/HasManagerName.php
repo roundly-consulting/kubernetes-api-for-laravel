@@ -13,10 +13,15 @@ trait HasManagerName
         return $this->managerName;
     }
 
-    public function setManagerName(?string $managerName): self
+    /**
+     * A copy carrying the field-manager name — sent as the user agent and used to key
+     * the cluster's rate-limit budget.
+     */
+    public function withManagerName(?string $managerName): static
     {
-        $this->managerName = $managerName;
+        $clone = clone $this;
+        $clone->managerName = $managerName;
 
-        return $this;
+        return $clone;
     }
 }

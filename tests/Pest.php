@@ -20,7 +20,6 @@ uses(TestCase::class)->in(
     'Support',
     'Traits',
     'WebSocket',
-    'KubernetesTest.php',
 );
 
 // The resource-registry swap proof needs `kubernetes.resources.pods` pointed at the host

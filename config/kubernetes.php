@@ -5,6 +5,40 @@ declare(strict_types=1);
 use RoundlyConsulting\KubernetesApi\Resources;
 
 return [
+    /*
+     * The cluster `Kubernetes::pods()`, `Kubernetes::ping()` and every other
+     * default-cluster shortcut talk to, and `kubernetes:ping` checks without an
+     * argument. Must name an entry below or a cluster registered in code.
+     */
+    'default' => env('KUBERNETES_CLUSTER', 'default'),
+
+    /*
+     * Named clusters, resolved lazily the first time they are used. `source` picks
+     * where the connection comes from:
+     *  - `url`        — the `url` and credential keys below;
+     *  - `kubeconfig` — a kubeconfig file (`kubeconfig`, null = KUBECONFIG or
+     *                   ~/.kube/config) and `context` (null = current-context);
+     *  - `in-cluster` — the service account mounted into the pod.
+     * `namespace` is the default for namespaced resources; `manager` is the field
+     * manager / user agent (and keys the cluster's rate-limit budget). Clusters
+     * registered with `Kubernetes::registerCluster()` override entries of the same name.
+     */
+    'clusters' => [
+        'default' => [
+            'source' => env('KUBERNETES_SOURCE', 'url'),
+            'url' => env('KUBERNETES_URL'),
+            'token' => env('KUBERNETES_TOKEN'),
+            'certificate' => env('KUBERNETES_CLIENT_CERTIFICATE'),
+            'private_key' => env('KUBERNETES_CLIENT_KEY'),
+            'ca_certificate' => env('KUBERNETES_CA_CERTIFICATE'),
+            'verify' => env('KUBERNETES_VERIFY_SSL', true),
+            'kubeconfig' => env('KUBERNETES_KUBECONFIG'),
+            'context' => env('KUBERNETES_CONTEXT'),
+            'namespace' => env('KUBERNETES_NAMESPACE', 'default'),
+            'manager' => env('KUBERNETES_MANAGER'),
+        ],
+    ],
+
     'client' => [
         'options' => [
             'timeout' => 5,
@@ -55,7 +89,7 @@ return [
         'ingresses' => Resources\Ingress::class,
         'jobs' => Resources\Job::class,
         'limitRanges' => Resources\LimitRange::class,
-        'namespaces' => Resources\Namespaces::class,
+        'namespaces' => Resources\KubernetesNamespace::class,
         'networkPolicies' => Resources\NetworkPolicy::class,
         'nodes' => Resources\Node::class,
         'persistentVolumes' => Resources\PersistentVolume::class,

@@ -6,6 +6,10 @@ namespace RoundlyConsulting\KubernetesApi\Traits;
 
 use SensitiveParameter;
 
+/**
+ * Cluster credentials. Every `with*()` / `without*()` returns a new instance and leaves
+ * the receiver untouched, so a shared client can never be re-credentialed.
+ */
 trait HasAuthentication
 {
     protected ?string $token = null;
@@ -63,45 +67,51 @@ trait HasAuthentication
         return $this->verify;
     }
 
-    public function withToken(#[SensitiveParameter] ?string $token): self
+    public function withToken(#[SensitiveParameter] ?string $token): static
     {
-        $this->token = $token;
+        $clone = clone $this;
+        $clone->token = $token;
 
-        return $this;
+        return $clone;
     }
 
-    public function withCertificate(?string $pathToCertificate): self
+    public function withCertificate(?string $pathToCertificate): static
     {
-        $this->pathToCertificate = $pathToCertificate;
+        $clone = clone $this;
+        $clone->pathToCertificate = $pathToCertificate;
 
-        return $this;
+        return $clone;
     }
 
-    public function withPrivateKey(?string $pathToPrivateKey): self
+    public function withPrivateKey(?string $pathToPrivateKey): static
     {
-        $this->pathToPrivateKey = $pathToPrivateKey;
+        $clone = clone $this;
+        $clone->pathToPrivateKey = $pathToPrivateKey;
 
-        return $this;
+        return $clone;
     }
 
-    public function withCaCertificate(?string $pathToCaCertificate): self
+    public function withCaCertificate(?string $pathToCaCertificate): static
     {
-        $this->pathToCaCertificate = $pathToCaCertificate;
+        $clone = clone $this;
+        $clone->pathToCaCertificate = $pathToCaCertificate;
 
-        return $this;
+        return $clone;
     }
 
-    public function withoutSslVerification(): self
+    public function withoutSslVerification(): static
     {
-        $this->verify = false;
+        $clone = clone $this;
+        $clone->verify = false;
 
-        return $this;
+        return $clone;
     }
 
-    public function withSslVerification(): self
+    public function withSslVerification(): static
     {
-        $this->verify = true;
+        $clone = clone $this;
+        $clone->verify = true;
 
-        return $this;
+        return $clone;
     }
 }

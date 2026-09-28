@@ -5,16 +5,16 @@ declare(strict_types=1);
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubernetesPatch;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\PodLogOptions;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\ResourcePage;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\WatchEvent;
-use RoundlyConsulting\KubernetesApi\Kubernetes;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 use RoundlyConsulting\KubernetesApi\Resources\Pod;
 
 beforeEach(function () {
-    $this->cluster = Kubernetes::make()->url('https://localhost')->withToken('secret')->setManagerName('Pest Tests');
+    $this->cluster = Cluster::make()->url('https://localhost')->withToken('secret')->withManagerName('Pest Tests');
 
     $this->deployment = Deployment::make()->setNamespace('production')->setName('checkout')->setCluster($this->cluster);
 
@@ -162,12 +162,12 @@ it('decodes a watch stream into watch events and skips blank lines', function ()
 });
 
 it('sends client certificate, key and ca verification options', function () {
-    $cluster = Kubernetes::make()
+    $cluster = Cluster::make()
         ->url('https://localhost')
         ->withCertificate('/tmp/client.crt')
         ->withPrivateKey('/tmp/client.key')
         ->withCaCertificate('/tmp/ca.crt')
-        ->setManagerName('Pest Tests');
+        ->withManagerName('Pest Tests');
 
     $deployment = Deployment::make()->setNamespace('production')->setName('checkout')->setCluster($cluster);
 

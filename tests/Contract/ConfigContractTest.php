@@ -31,8 +31,14 @@ it('ships exactly the config keys it reads', function (): void {
         // mapping the variable is what makes them visible — and it is strictly better
         // than `allowUnread`, which would assert a falsehood: these keys are read, and
         // each one steers a real limiter decision.
+        //
+        // A cluster entry is read the same way: `KubernetesManager::clusterFromConfig()`
+        // takes one `clusters.<name>` array and reads its offsets. The shipped entry is
+        // `default`, so the offsets map onto its leaves — every cluster a host adds has
+        // the same keys.
         'sectionVariables' => [
             'InteractsWithRateLimits.php' => ['$config' => 'kubernetes.rate_limits'],
+            'KubernetesManager.php' => ['$definition' => 'kubernetes.clusters.default'],
         ],
 
         // The two genuine map-shaped reads, allowed per leaf rather than by excluding

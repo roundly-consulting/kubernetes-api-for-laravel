@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\ServiceProvider;
 use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
 use RoundlyConsulting\KubernetesApi\KubernetesApiServiceProvider;
+use RoundlyConsulting\KubernetesApi\KubernetesManager;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 
 it('merges the package config', function (): void {
@@ -17,8 +18,14 @@ it('registers the package commands', function (): void {
     expect(Artisan::all())->toHaveKey('kubernetes:ping');
 });
 
-it('registers the configured resources on the cluster client', function (): void {
-    expect(Kubernetes::make()->deployments())->toBeInstanceOf(Deployment::class);
+it('resolves the configured resources on the default cluster', function (): void {
+    expect(Kubernetes::deployments())->toBeInstanceOf(Deployment::class)
+        ->and(Kubernetes::deployments()->getCluster())->toBe(Kubernetes::cluster());
+});
+
+it('binds the manager as a singleton', function (): void {
+    expect(app(KubernetesManager::class))->toBe(app(KubernetesManager::class))
+        ->and(app(KubernetesManager::class))->toBe(Kubernetes::getFacadeRoot());
 });
 
 it('publishes the config under the kubernetes-config tag', function (): void {
@@ -34,7 +41,6 @@ it('publishes the config under the kubernetes-config tag', function (): void {
 it('contributes a section to the about command', function (): void {
     $this->artisan('about', ['--only' => 'kubernetes'])
         ->expectsOutputToContain('ENABLED')
-        ->expectsOutputToContain('traefik.io/v1alpha1')
         ->assertSuccessful();
 });
 

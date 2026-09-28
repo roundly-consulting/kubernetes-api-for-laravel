@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace RoundlyConsulting\KubernetesApi\Traits\Resource;
 
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\ExecResult;
-use RoundlyConsulting\KubernetesApi\WebSocket\ExecConnection;
 
 trait CanExec
 {
@@ -19,9 +18,7 @@ trait CanExec
      */
     public function exec(array $command, ?string $container = null, bool $tty = false): ExecResult
     {
-        $connection = new ExecConnection($this->getCluster());
-
-        return $connection->send($this->getExecPath($command, $container, $tty));
+        return $this->requireCluster()->execute($this->getExecPath($command, $container, $tty));
     }
 
     /**

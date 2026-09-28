@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use RoundlyConsulting\KubernetesApi\Kubernetes;
+use RoundlyConsulting\KubernetesApi\KubernetesManager;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
 use RoundlyConsulting\KubernetesApi\Resources\Types\Type;
 use RoundlyConsulting\Testing\Arch\ArchPresets;
@@ -21,8 +21,10 @@ ArchPresets::strictTypes('RoundlyConsulting\KubernetesApi');
  * `final` on any of the 45 would be a fatal error the moment it did. They are the
  * package's documented extension surface, not classes that escaped a rule.
  *
- * `Kubernetes` is the manager those resources are resolved through; the exception
- * hierarchy is extended by hosts catching package errors uniformly.
+ * `KubernetesManager` is the facade root and stays open because `Testing\KubernetesFake`
+ * extends it — the fake must be a subtype of the accessor so an injected manager gets
+ * the fake too. The exception hierarchy is extended by hosts catching package errors
+ * uniformly. The facade itself is final (pinned by `toDocumentItsRoot()`).
  *
  * Note that these resources are NOT Eloquent models and sit behind no `*_model` key
  * (`Resource implements Arrayable, Jsonable` — there is no Model in this package at
@@ -39,21 +41,27 @@ ArchPresets::strictTypes('RoundlyConsulting\KubernetesApi');
  * guarantees the fluent form cannot: the entries are rot-checked, and the prefix SHADOW
  * is recovered.
  *
- * The shadow is not hypothetical here. `Kubernetes::class` also silences
- * `KubernetesApiServiceProvider` — Pest matches exemptions by string prefix, not class
- * identity (pest-plugin-arch Blueprint.php:103), and the provider's FQCN starts with the
- * manager's. Nobody exempted it and nothing reported it. It is `final` today, so this is
- * green and the finding is inert — but `finalByDefault` had silently stopped applying to
- * the provider, and now it applies again by reflection.
+ * The shadow is not hypothetical here. The manager used to be `Kubernetes::class`, which
+ * also silenced `KubernetesApiServiceProvider` — Pest matches exemptions by string
+ * prefix, not class identity (pest-plugin-arch Blueprint.php:103), and the provider's
+ * FQCN started with the manager's. The parameter form applies the rule by reflection, so
+ * no prefix can swallow a neighbour again.
  */
 ArchPresets::finalByDefault('RoundlyConsulting\KubernetesApi', [
     // Namespace-form, deliberate subtree exclusions — the shadow guard leaves these
     // alone on purpose: what a namespace exemption reaches IS the point.
     'RoundlyConsulting\KubernetesApi\Resources',
     'RoundlyConsulting\KubernetesApi\Exceptions',
-    Kubernetes::class,
-    RoundlyConsulting\KubernetesApi\Facades\Kubernetes::class,
+    KubernetesManager::class,
 ]);
+
+/**
+ * Model convenience methods and traits must reach behaviour through the manager so the
+ * fake sees every call. This package has no `Models` and no `Actions` (it is a
+ * remote-API client exposing resource objects), but it does ship `Concerns` and
+ * `Traits` — the guard keeps it that way if an action ever lands.
+ */
+ArchPresets::modelsGoThroughTheFacade('RoundlyConsulting\KubernetesApi');
 
 /**
  * Scoped to the namespaces where a primitive would MEAN cryptography, rather than

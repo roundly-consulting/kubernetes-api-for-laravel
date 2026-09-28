@@ -19,6 +19,15 @@ it('renders the section without disclosing a cluster credential or endpoint', fu
     config()->set('kubernetes.rate_limits.enabled', true);
     config()->set('kubernetes.rate_limits.adaptive', true);
     config()->set('kubernetes.traefik.group', 'traefik.io/v1alpha1');
+    config()->set('kubernetes.default', 'production');
+    config()->set('kubernetes.clusters', [
+        'production' => [
+            'url' => 'https://k8s-prod.internal:6443',
+            'token' => 'eyJhbGciOiJSUzI1NiIsImtpZCI6',
+            'ca_certificate' => '/etc/k8s/prod-ca.crt',
+        ],
+        'staging' => ['source' => 'kubeconfig', 'kubeconfig' => '/Users/ci/.kube/config'],
+    ]);
 
     expect('kubernetes')->toLeakNoSecrets(
         secrets: [
@@ -27,8 +36,14 @@ it('renders the section without disclosing a cluster credential or endpoint', fu
             'eyJhbGciOiJSUzI1NiIsImtpZCI6',
             '/var/run/secrets/kubernetes.io/serviceaccount/token',
             '/Users/ci/.kube/config',
+            '/etc/k8s/prod-ca.crt',
         ],
         mustRender: [
+            // The cluster is named, never located: the name and the count render,
+            // the URL, token and CA path configured above do not.
+            'Default cluster',
+            'production',
+            'Configured clusters',
             'Rate limiting',
             'Adaptive throttling',
             'Registered resources',

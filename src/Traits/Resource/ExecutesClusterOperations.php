@@ -5,10 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\KubernetesApi\Traits\Resource;
 
 use Generator;
-use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
-use Illuminate\Support\Facades\Http;
-use RoundlyConsulting\KubernetesApi\Concerns\InteractsWithRateLimits;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubernetesPatch;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\ResourcePage;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\WatchEvent;
@@ -22,7 +19,6 @@ trait ExecutesClusterOperations
     use HasCluster;
     use HasClusterPaths;
     use HasListing;
-    use InteractsWithRateLimits;
 
     protected bool $dryRun = false;
 
@@ -311,6 +307,10 @@ trait ExecutesClusterOperations
     }
 
     /**
+     * Send the request through the bound cluster, which authenticates, rate limits
+     * and throws a `KubernetesException` for a failed response (or hands the call
+     * to `Kubernetes::fake()`).
+     *
      * @param  array<string, mixed>  $query
      */
     protected function request(
@@ -321,84 +321,27 @@ trait ExecutesClusterOperations
         ?string $contentType = null,
         bool $stream = false,
     ): Response {
-        $cluster = $this->getCluster();
-
-        $request = Http::baseUrl($cluster->getUrl())
-            ->withUserAgent($cluster->getManagerName())
-            ->withHeaders(['Accept-Encoding' => 'gzip, deflate']);
-
-        if ($stream) {
-            $request->withOptions(['stream' => true]);
-        }
-
-        $this->applyAuthentication($request);
-
-        $request->withOptions((array) config('kubernetes.client.options', []));
-
-        if ($contentType !== null) {
-            $request->withBody($payload, $contentType);
-        } else {
-            $request->withBody($payload);
-        }
-
-        // The limiter callback returns the raw Response (429 and all) so hcrl's
-        // adaptive path can read the apiserver's `Retry-After` header before we
-        // convert a failed response into an exception. Throwing inside the
-        // callback would lose that signal.
-        $response = $this->throttled(
-            $cluster,
-            fn (): Response => $request->send($method, "{$path}?{$this->getQueryString($query)}"),
-        );
-
-        if ($response->failed()) {
-            $message = $response->json('message');
-
-            throw new KubernetesException(
-                $response,
-                is_string($message) ? $message : null,
-            );
-        }
-
-        return $response;
+        return $this->requireCluster()->request($method, $path, $query, $payload, $contentType, $stream);
     }
 
-    protected function applyAuthentication(PendingRequest $request): void
-    {
-        $cluster = $this->getCluster();
-
-        if ($cluster->shouldVerify()) {
-            $request->withOptions([
-                'verify' => $cluster->hasPathToCaCertificate() ? $cluster->getPathToCaCertificate() : true,
-            ]);
-        } else {
-            $request->withoutVerifying();
-        }
-
-        if ($cluster->hasToken()) {
-            $request->withToken($cluster->getToken());
-        }
-
-        if ($cluster->hasPathToCertificate()) {
-            $request->withOptions(['cert' => $cluster->getPathToCertificate()]);
-        }
-
-        if ($cluster->hasPathToPrivateKey()) {
-            $request->withOptions(['ssl_key' => $cluster->getPathToPrivateKey()]);
-        }
-    }
-
-    /** @param array<string, mixed> $attributes */
+    /**
+     * A sibling instance for a server payload: same cluster, same default namespace
+     * and — for a scoped resource — the same namespace pin, so nothing a scoped
+     * listing returns can be re-pointed outside the scope.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
     public function newInstance(array $attributes = []): static
     {
-        return (new static($attributes))->setCluster($this->getCluster());
-    }
+        $instance = (new static($attributes))
+            ->setDefaultNamespace($this->defaultNamespace)
+            ->setCluster($this->getCluster());
 
-    /** @param array<string, mixed> $query */
-    protected function getQueryString(array $query): string
-    {
-        return urldecode(
-            (string) preg_replace('/%5B(?:[0-9]|[1-9][0-9]+)%5D=/', '=', http_build_query($query))
-        );
+        if ($this->namespaceScope !== null) {
+            $instance->scopeToNamespace($this->namespaceScope);
+        }
+
+        return $instance;
     }
 
     protected function payload(Resource|Type|null $value = null): string

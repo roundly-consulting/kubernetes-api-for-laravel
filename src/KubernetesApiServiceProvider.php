@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace RoundlyConsulting\KubernetesApi;
 
 use RoundlyConsulting\KubernetesApi\Commands\PingCommand;
-use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
-use RoundlyConsulting\KubernetesApi\Resources\Resource;
 use RoundlyConsulting\PackageToolkit\Package;
 use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
 
@@ -23,9 +21,14 @@ final class KubernetesApiServiceProvider extends PackageServiceProvider
             ->contributesToAbout(static function (): array {
                 /** @var array<string, mixed> $resources */
                 $resources = config('kubernetes.resources', []);
+                /** @var array<string, mixed> $clusters */
+                $clusters = config('kubernetes.clusters', []);
                 $throttled = config('kubernetes.rate_limits.enabled', true) !== false;
 
+                // Names and counts only — never a URL, token or certificate path.
                 return [
+                    'Default cluster' => (string) config('kubernetes.default', 'default'),
+                    'Configured clusters' => (string) count($clusters),
                     'Rate limiting' => $throttled ? 'ENABLED' : 'OFF',
                     'Adaptive throttling' => $throttled && config('kubernetes.rate_limits.adaptive', true) !== false ? 'ON' : 'OFF',
                     'Registered resources' => (string) count($resources),
@@ -34,20 +37,10 @@ final class KubernetesApiServiceProvider extends PackageServiceProvider
             });
     }
 
-    public function boot(): void
+    public function register(): void
     {
-        parent::boot();
+        parent::register();
 
-        $this->registerConfiguredResources();
-    }
-
-    private function registerConfiguredResources(): void
-    {
-        /** @var array<string, class-string<resource>> $resources */
-        $resources = config('kubernetes.resources', []);
-
-        foreach ($resources as $name => $resourceClassName) {
-            Kubernetes::registerResource($name, $resourceClassName);
-        }
+        $this->app->singleton(KubernetesManager::class);
     }
 }

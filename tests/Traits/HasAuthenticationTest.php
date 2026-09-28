@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 use RoundlyConsulting\KubernetesApi\Traits\HasAuthentication;
 
-it('stores authentication details', function () {
-    $instance = new class
+it('stores authentication details on a copy', function () {
+    $original = new class
     {
         use HasAuthentication;
     };
 
-    $instance->withToken('ABCD')
+    $instance = $original->withToken('ABCD')
         ->withoutSslVerification()
         ->withCertificate('certificate.pem')
         ->withCaCertificate('ca.pem')
@@ -27,7 +27,26 @@ it('stores authentication details', function () {
         ->getPathToPrivateKey()->toBe('private.key')
         ->shouldVerify()->toBeFalse();
 
-    $instance->withSslVerification();
+    expect($instance->withSslVerification())->shouldVerify()->toBeTrue()
+        ->and($instance->shouldVerify())->toBeFalse();
+});
 
-    expect($instance)->shouldVerify()->toBeTrue();
+it('never mutates the receiver', function () {
+    $original = new class
+    {
+        use HasAuthentication;
+    };
+
+    $original->withToken('ABCD');
+    $original->withCertificate('certificate.pem');
+    $original->withPrivateKey('private.key');
+    $original->withCaCertificate('ca.pem');
+    $original->withoutSslVerification();
+
+    expect($original)
+        ->hasToken()->toBeFalse()
+        ->hasPathToCertificate()->toBeFalse()
+        ->hasPathToPrivateKey()->toBeFalse()
+        ->hasPathToCaCertificate()->toBeFalse()
+        ->shouldVerify()->toBeTrue();
 });

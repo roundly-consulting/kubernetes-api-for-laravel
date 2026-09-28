@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 use RoundlyConsulting\KubernetesApi\Traits\HasUrl;
 
-it('stores url value', function () {
+it('returns a copy pointed at the url', function () {
     $instance = new class
     {
         use HasUrl;
     };
 
-    $instance->url('https://domain.tld');
+    $pointed = $instance->url('https://domain.tld');
 
-    expect($instance->getUrl())->toBe('https://domain.tld');
+    expect($pointed->getUrl())->toBe('https://domain.tld')
+        ->and($pointed)->not->toBe($instance)
+        ->and($instance->getUrl())->toBe('');
 });

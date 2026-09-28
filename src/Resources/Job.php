@@ -56,14 +56,6 @@ class Job extends Resource
         return $this->getStatus('succeeded', 0);
     }
 
-    /**
-     * @deprecated Misspelled alias of getSucceededPodsCount(); use getSucceededPodsCount() instead.
-     */
-    public function getSuccededPodsCount(): int
-    {
-        return $this->getSucceededPodsCount();
-    }
-
     public function getStartTime(): ?Carbon
     {
         $time = $this->getStatus('startTime');

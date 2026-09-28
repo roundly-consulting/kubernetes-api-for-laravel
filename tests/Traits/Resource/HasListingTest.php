@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use RoundlyConsulting\KubernetesApi\Kubernetes;
+use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\Resources\Pod;
 
 beforeEach(function () {
     $this->pods = Pod::make()->setNamespace('production')->setCluster(
-        Kubernetes::make()->url('https://localhost')->withToken('secret')->setManagerName('Pest Tests')
+        Cluster::make()->url('https://localhost')->withToken('secret')->withManagerName('Pest Tests')
     );
 
     Http::preventStrayRequests();

@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Traits\Resource;
 
+use RoundlyConsulting\KubernetesApi\Exceptions\NamespaceScopeException;
+
 trait HasListing
 {
+    use HasNamespace;
+
     /** @var list<string> */
     protected array $labelSelectors = [];
 
@@ -90,8 +94,15 @@ trait HasListing
         return $this;
     }
 
+    /**
+     * @throws NamespaceScopeException on a resource pinned by a namespace-scoped cluster
+     */
     public function allNamespaces(bool $all = true): static
     {
+        if ($all && $this->namespaceScope !== null) {
+            throw NamespaceScopeException::allNamespaces($this->namespaceScope);
+        }
+
         $this->allNamespaces = $all;
 
         return $this;

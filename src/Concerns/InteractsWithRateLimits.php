@@ -11,8 +11,8 @@ use RoundlyConsulting\HttpClientRateLimits\Exceptions\RateLimitExceededException
 use RoundlyConsulting\HttpClientRateLimits\Facades\RateLimits;
 use RoundlyConsulting\HttpClientRateLimits\Limit;
 use RoundlyConsulting\HttpClientRateLimits\RateLimit;
+use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException;
-use RoundlyConsulting\KubernetesApi\Kubernetes;
 
 trait InteractsWithRateLimits
 {
@@ -25,7 +25,7 @@ trait InteractsWithRateLimits
      * on (the default) the limiter also honours the apiserver's own
      * `Retry-After` header on a 429.
      */
-    protected function rateLimiter(Kubernetes $cluster): ?RateLimit
+    protected function rateLimiter(Cluster $cluster): ?RateLimit
     {
         /** @var array<string, mixed> $config */
         $config = config('kubernetes.rate_limits', []);
@@ -64,7 +64,7 @@ trait InteractsWithRateLimits
      *
      * @param  Closure(): Response  $send
      */
-    protected function throttled(Kubernetes $cluster, Closure $send): Response
+    protected function throttled(Cluster $cluster, Closure $send): Response
     {
         $rateLimit = $this->rateLimiter($cluster);
 
@@ -90,7 +90,7 @@ trait InteractsWithRateLimits
      * Fairness is per-apiserver, so keying per cluster is correct — two clusters
      * never share a window. Prefers the manager name, else the request host.
      */
-    protected function clusterKey(Kubernetes $cluster): string
+    protected function clusterKey(Cluster $cluster): string
     {
         $managerName = $cluster->getManagerName();
 

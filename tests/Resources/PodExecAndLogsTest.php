@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Http;
+use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\PodLogOptions;
-use RoundlyConsulting\KubernetesApi\Kubernetes;
 use RoundlyConsulting\KubernetesApi\Resources\Pod;
 
 beforeEach(function () {
-    $this->cluster = Kubernetes::make()->url('https://localhost')->withToken('secret')->setManagerName('Pest Tests');
+    $this->cluster = Cluster::make()->url('https://localhost')->withToken('secret')->withManagerName('Pest Tests');
     $this->pod = Pod::make()->setNamespace('production')->setName('api')->setCluster($this->cluster);
 });
 

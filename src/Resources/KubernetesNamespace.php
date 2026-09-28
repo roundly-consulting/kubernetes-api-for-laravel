@@ -7,7 +7,11 @@ namespace RoundlyConsulting\KubernetesApi\Resources;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasStatus;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasStatusPhase;
 
-class Namespaces extends Resource
+/**
+ * A Kubernetes `Namespace`. The class is not called `Namespace` because that is a
+ * reserved word in PHP; the accessor stays `namespaces()`.
+ */
+class KubernetesNamespace extends Resource
 {
     use HasStatus;
     use HasStatusPhase;

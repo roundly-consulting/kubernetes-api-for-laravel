@@ -71,13 +71,6 @@ it('returns pod counts from status with defaults', function () {
         ->getSucceededPodsCount()->toBe(0);
 });
 
-it('keeps the misspelled getSuccededPodsCount alias for back-compat', function () {
-    $job = Job::make(['status' => ['succeeded' => 7]]);
-
-    expect($job->getSuccededPodsCount())->toBe(7)
-        ->and($job->getSucceededPodsCount())->toBe(7);
-});
-
 it('returns start and completion times as carbon instances', function () {
     $job = Job::make([
         'status' => [

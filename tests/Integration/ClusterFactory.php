@@ -6,14 +6,14 @@ namespace RoundlyConsulting\KubernetesApi\Tests\Integration;
 
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
-use RoundlyConsulting\KubernetesApi\Kubernetes;
-use RoundlyConsulting\KubernetesApi\Resources\Namespaces;
+use RoundlyConsulting\KubernetesApi\Cluster;
+use RoundlyConsulting\KubernetesApi\Resources\KubernetesNamespace;
 use RoundlyConsulting\KubernetesApi\Support\IntegrationGuard;
 use RuntimeException;
 use Throwable;
 
 /**
- * Builds a {@see Kubernetes} client pointed at the local OrbStack cluster for
+ * Builds a {@see Cluster} client pointed at the local OrbStack cluster for
  * the live integration suite, after running the {@see IntegrationGuard}. The
  * client credentials are extracted from the pinned `orbstack` kubeconfig
  * context only — never the user's global/default context.
@@ -44,7 +44,7 @@ final class ClusterFactory
         );
     }
 
-    public static function make(): Kubernetes
+    public static function make(): Cluster
     {
         self::guard()->assertSafe();
 
@@ -53,18 +53,19 @@ final class ClusterFactory
         $cluster = $view['clusters'][0]['cluster'] ?? [];
         $user = $view['users'][0]['user'] ?? [];
 
-        $client = Kubernetes::make()
+        $client = Cluster::make()
             ->url(self::serverUrl())
-            ->setManagerName('k8s-integration-tests');
+            ->withManagerName('k8s-integration-tests');
 
+        // Clusters are immutable: every with*() returns the configured copy.
         if (isset($cluster['certificate-authority-data'])) {
-            $client->withCaCertificate(self::materialise('ca', (string) $cluster['certificate-authority-data']));
+            $client = $client->withCaCertificate(self::materialise('ca', (string) $cluster['certificate-authority-data']));
         } else {
-            $client->withoutSslVerification();
+            $client = $client->withoutSslVerification();
         }
 
         if (isset($user['client-certificate-data'], $user['client-key-data'])) {
-            $client
+            $client = $client
                 ->withCertificate(self::materialise('crt', (string) $user['client-certificate-data']))
                 ->withPrivateKey(self::materialise('key', (string) $user['client-key-data']));
         }
@@ -87,12 +88,12 @@ final class ClusterFactory
      * Create a fresh throwaway namespace and block until it is Active, so
      * dependent objects can be created in it without races.
      */
-    public static function createNamespace(Kubernetes $cluster, string $namespace): void
+    public static function createNamespace(Cluster $cluster, string $namespace): void
     {
-        Namespaces::make()->setCluster($cluster)->setName($namespace)->updateOrCreate();
+        KubernetesNamespace::make()->setCluster($cluster)->setName($namespace)->updateOrCreate();
 
         retry(20, function () use ($cluster, $namespace): void {
-            $ns = Namespaces::make()->setCluster($cluster)->setName($namespace)->find();
+            $ns = KubernetesNamespace::make()->setCluster($cluster)->setName($namespace)->find();
             throw_unless($ns->isActive(), new RuntimeException('namespace not active'));
         }, 250);
     }
@@ -101,10 +102,10 @@ final class ClusterFactory
      * Best-effort deletion of a throwaway namespace; never throws so it is safe
      * in an afterEach even when the test already failed.
      */
-    public static function deleteNamespace(Kubernetes $cluster, string $namespace): void
+    public static function deleteNamespace(Cluster $cluster, string $namespace): void
     {
         try {
-            Namespaces::make()->setCluster($cluster)->setName($namespace)->delete();
+            KubernetesNamespace::make()->setCluster($cluster)->setName($namespace)->delete();
         } catch (Throwable) {
             // best-effort cleanup
         }
@@ -115,7 +116,7 @@ final class ClusterFactory
      * OrbStack credentials. Used for read-only discovery endpoints (`/version`,
      * `/apis`) and CRD presence checks that no typed resource covers.
      */
-    public static function rawGet(Kubernetes $cluster, string $path): Response
+    public static function rawGet(Cluster $cluster, string $path): Response
     {
         $request = Http::baseUrl($cluster->getUrl())->withUserAgent((string) $cluster->getManagerName());
 
@@ -146,7 +147,7 @@ final class ClusterFactory
      * Whether the cluster serves the given API group (e.g. `traefik.io`). Used
      * to skip CRD-dependent cases on clusters that don't ship them.
      */
-    public static function hasApiGroup(Kubernetes $cluster, string $group): bool
+    public static function hasApiGroup(Cluster $cluster, string $group): bool
     {
         $response = self::rawGet($cluster, '/apis');
 

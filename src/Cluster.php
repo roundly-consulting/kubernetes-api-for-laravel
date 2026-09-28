@@ -1,0 +1,251 @@
+<?php
+
+declare(strict_types=1);
+
+namespace RoundlyConsulting\KubernetesApi;
+
+use BadMethodCallException;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Traits\Conditionable;
+use Illuminate\Support\Traits\Macroable;
+use RoundlyConsulting\KubernetesApi\Concerns\ResolvesResources;
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\ExecResult;
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubeConfig;
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\VersionInfo;
+use RoundlyConsulting\KubernetesApi\Exceptions\ClusterConfigurationException;
+use RoundlyConsulting\KubernetesApi\Exceptions\KubernetesException;
+use RoundlyConsulting\KubernetesApi\Exceptions\NamespaceScopeException;
+use RoundlyConsulting\KubernetesApi\Http\HttpTransport;
+use RoundlyConsulting\KubernetesApi\Http\Transport;
+use RoundlyConsulting\KubernetesApi\Resources\Resource;
+use RoundlyConsulting\KubernetesApi\Support\ResourceRegistry;
+use RoundlyConsulting\KubernetesApi\Traits\HasAuthentication;
+use RoundlyConsulting\KubernetesApi\Traits\HasManagerName;
+use RoundlyConsulting\KubernetesApi\Traits\HasUrl;
+use RoundlyConsulting\KubernetesApi\Traits\Makeable;
+
+/**
+ * One Kubernetes apiserver: its URL, credentials, default namespace and optional
+ * namespace scope, plus a typed accessor per registered resource.
+ *
+ * A cluster is **immutable**. `url()`, every `with*()` / `without*()` and `namespace()`
+ * return a new instance and leave the receiver untouched, so a client handed out by the
+ * facade (or held in a singleton) can never be re-pointed or re-credentialed by a later
+ * caller. Resolve clusters through {@see KubernetesManager} (the `Kubernetes` facade):
+ * those are the ones `Kubernetes::fake()` intercepts.
+ */
+final class Cluster
+{
+    use Conditionable;
+    use HasAuthentication;
+    use HasManagerName;
+    use HasUrl;
+    use Macroable {
+        __call as macroCall;
+    }
+    use Makeable;
+    use ResolvesResources;
+
+    private string $defaultNamespace = 'default';
+
+    private ?string $namespaceScope = null;
+
+    public function __construct(
+        private readonly Transport $transport = new HttpTransport,
+        private readonly ?string $name = null,
+    ) {}
+
+    /**
+     * The name the cluster was registered under, or null for an ad-hoc client
+     * (`Kubernetes::url()`, `fromKubeConfig()`, `inCluster()`, `connect()`).
+     */
+    public function name(): ?string
+    {
+        return $this->name;
+    }
+
+    /**
+     * A copy of this client with a kubeconfig/in-cluster connection applied.
+     */
+    public function applyConfig(KubeConfig $config): self
+    {
+        $cluster = $this->url($config->server)
+            ->withToken($config->token)
+            ->withCertificate($config->clientCertificatePath)
+            ->withPrivateKey($config->clientKeyPath)
+            ->withCaCertificate($config->certificateAuthorityPath);
+
+        return $config->verify ? $cluster->withSslVerification() : $cluster->withoutSslVerification();
+    }
+
+    /**
+     * A copy of this client scoped to one namespace. Every namespaced resource it hands
+     * out is pinned to that namespace and refuses to be pointed anywhere else — the
+     * scope is a security boundary, not a default.
+     *
+     * @throws NamespaceScopeException when this client is already scoped to another namespace
+     */
+    public function namespace(string $namespace): self
+    {
+        if ($this->namespaceScope !== null && $this->namespaceScope !== $namespace) {
+            throw NamespaceScopeException::rescope($this->namespaceScope, $namespace);
+        }
+
+        $cluster = clone $this;
+        $cluster->namespaceScope = $namespace;
+        $cluster->defaultNamespace = $namespace;
+
+        return $cluster;
+    }
+
+    /**
+     * The namespace this client is scoped to, or null when it is not scoped.
+     */
+    public function namespaceScope(): ?string
+    {
+        return $this->namespaceScope;
+    }
+
+    /**
+     * A copy of this client whose resources default to the given namespace (a soft
+     * default — unlike {@see namespace()} it does not refuse other namespaces).
+     */
+    public function withDefaultNamespace(string $namespace): self
+    {
+        if ($this->namespaceScope !== null && $this->namespaceScope !== $namespace) {
+            throw NamespaceScopeException::rescope($this->namespaceScope, $namespace);
+        }
+
+        $cluster = clone $this;
+        $cluster->defaultNamespace = $namespace;
+
+        return $cluster;
+    }
+
+    public function defaultNamespace(): string
+    {
+        return $this->defaultNamespace;
+    }
+
+    /**
+     * Resolve a fresh, cluster-bound instance of the given resource class.
+     *
+     * @template TResource of Resource
+     *
+     * @param  class-string<TResource>  $resource
+     * @return TResource
+     */
+    public function resource(string $resource): Resource
+    {
+        return (new $resource)
+            ->setDefaultNamespace($this->defaultNamespace)
+            ->setCluster($this);
+    }
+
+    /**
+     * Whether a resource is registered under the given accessor name, in
+     * `config('kubernetes.resources')` or through `Kubernetes::registerResource()`.
+     */
+    public function hasResource(string $name): bool
+    {
+        return ResourceRegistry::classFor($name) !== null;
+    }
+
+    /**
+     * Whether the apiserver answers `/version`. Connection failures, error responses
+     * and a cluster without a URL all report `false`; a client-side rate-limit
+     * exhaustion still throws, because it says nothing about the server.
+     */
+    public function ping(): bool
+    {
+        try {
+            $this->version();
+        } catch (KubernetesException|ConnectionException|ClusterConfigurationException) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * The apiserver's build information from `/version`.
+     */
+    public function version(): VersionInfo
+    {
+        /** @var array<string, mixed> $payload */
+        $payload = (array) $this->request('GET', '/version')->json();
+
+        return VersionInfo::fromResponse($payload);
+    }
+
+    /**
+     * Send a raw request to the apiserver through this cluster's transport —
+     * authenticated, rate limited and faked exactly like the typed resources.
+     *
+     * @param  array<string, mixed>  $query
+     *
+     * @throws KubernetesException when the apiserver answers with an error status
+     */
+    public function request(
+        string $method,
+        string $path,
+        array $query = [],
+        string $body = '',
+        ?string $contentType = null,
+        bool $stream = false,
+    ): Response {
+        $response = $this->transport->send($this, $method, $path, $query, $body, $contentType, $stream);
+
+        if ($response->failed()) {
+            $message = $response->json('message');
+
+            throw new KubernetesException($response, is_string($message) ? $message : null);
+        }
+
+        return $response;
+    }
+
+    /**
+     * @internal Opens the exec WebSocket for {@see Resources\Pod::exec()}.
+     */
+    public function execute(string $path): ExecResult
+    {
+        return $this->transport->exec($this, $path);
+    }
+
+    /**
+     * Resolve a custom resource registered by name (`$cluster->traefikIngressRoutes()`
+     * style) or a macro.
+     *
+     * @param  array<int, mixed>  $parameters
+     */
+    public function __call(string $method, array $parameters): mixed
+    {
+        if (self::hasMacro($method)) {
+            return $this->macroCall($method, $parameters);
+        }
+
+        $resource = ResourceRegistry::classFor($method);
+
+        if ($resource === null) {
+            throw new BadMethodCallException(sprintf('Method %s::%s does not exist.', self::class, $method));
+        }
+
+        return $this->resource($resource);
+    }
+
+    /**
+     * @param  class-string<TResource>  $default
+     * @return TResource
+     *
+     * @template TResource of Resource
+     */
+    protected function configuredResource(string $name, string $default): Resource
+    {
+        /** @var class-string<TResource> $class */
+        $class = ResourceRegistry::classFor($name) ?? $default;
+
+        return $this->resource($class);
+    }
+}

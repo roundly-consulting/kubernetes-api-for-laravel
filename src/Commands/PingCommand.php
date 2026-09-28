@@ -5,77 +5,47 @@ declare(strict_types=1);
 namespace RoundlyConsulting\KubernetesApi\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Http\Client\Response;
-use Illuminate\Support\Facades\Http;
-use RoundlyConsulting\KubernetesApi\Concerns\InteractsWithRateLimits;
-use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
+use RoundlyConsulting\KubernetesApi\Exceptions\ClusterConfigurationException;
+use RoundlyConsulting\KubernetesApi\Exceptions\ClusterNotFoundException;
+use RoundlyConsulting\KubernetesApi\KubernetesManager;
 use Throwable;
 
 final class PingCommand extends Command
 {
-    use InteractsWithRateLimits;
-
-    protected $signature = 'kubernetes:ping {cluster? : The registered cluster name to ping}';
+    protected $signature = 'kubernetes:ping {cluster? : The cluster name to ping (the default cluster when omitted)}';
 
     protected $description = 'Check connectivity to a Kubernetes cluster by calling its /version endpoint';
 
-    public function handle(): int
+    public function handle(KubernetesManager $kubernetes): int
     {
         $name = $this->argument('cluster');
+        $name = is_string($name) && $name !== '' ? $name : null;
 
         try {
-            $cluster = is_string($name) && $name !== ''
-                ? Kubernetes::cluster($name)
-                : Kubernetes::getFacadeRoot();
-        } catch (Throwable $e) {
+            $cluster = $kubernetes->cluster($name);
+        } catch (ClusterNotFoundException|ClusterConfigurationException $e) {
             $this->components->error($e->getMessage());
 
             return self::FAILURE;
         }
 
-        if ($cluster->getUrl() === '') {
-            $this->components->error('No cluster URL configured. Register a cluster or pass a cluster name.');
-
-            return self::FAILURE;
-        }
+        $label = $cluster->name() ?? $cluster->getUrl();
 
         try {
-            $request = Http::baseUrl($cluster->getUrl());
+            // Through the cluster's transport: the same per-cluster rate limiter as
+            // resource operations, and `Kubernetes::fake()` answers it in tests.
+            $version = $cluster->version();
+        } catch (ClusterConfigurationException $e) {
+            $this->components->error($e->getMessage());
 
-            if ($cluster->shouldVerify()) {
-                $request->withOptions([
-                    'verify' => $cluster->hasPathToCaCertificate() ? $cluster->getPathToCaCertificate() : true,
-                ]);
-            } else {
-                $request->withoutVerifying();
-            }
-
-            if ($cluster->hasToken()) {
-                $request->withToken((string) $cluster->getToken());
-            }
-
-            if ($cluster->hasPathToCertificate()) {
-                $request->withOptions(['cert' => $cluster->getPathToCertificate()]);
-            }
-
-            if ($cluster->hasPathToPrivateKey()) {
-                $request->withOptions(['ssl_key' => $cluster->getPathToPrivateKey()]);
-            }
-
-            // Route the probe through the same per-cluster limiter as resource
-            // operations so the ping counts against the cluster budget.
-            $response = $this->throttled($cluster, fn (): Response => $request->get('/version'))->throw();
-
-            $version = $response->json('gitVersion');
+            return self::FAILURE;
         } catch (Throwable $e) {
-            $this->components->error("Could not reach {$cluster->getUrl()}: {$e->getMessage()}");
+            $this->components->error("Could not reach {$label}: {$e->getMessage()}");
 
             return self::FAILURE;
         }
 
-        $label = is_string($name) && $name !== '' ? $name : $cluster->getUrl();
-
-        $this->components->info("Connected to {$label} — server ".(is_string($version) ? $version : 'unknown'));
+        $this->components->info("Connected to {$label} — server ".($version->gitVersion !== '' ? $version->gitVersion : 'unknown'));
 
         return self::SUCCESS;
     }

@@ -35,14 +35,6 @@ trait HasKind
             ->toString();
     }
 
-    /**
-     * @deprecated Misspelled alias of getPluralKind(); use getPluralKind() instead.
-     */
-    public function getPlurarKind(): string
-    {
-        return $this->getPluralKind();
-    }
-
     public function setPlural(?string $plural): static
     {
         $this->plural = $plural;

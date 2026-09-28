@@ -49,17 +49,6 @@ it('gets plural version of kind', function () {
     expect($instance->getPluralKind())->toBe('deployments');
 });
 
-it('keeps the misspelled getPlurarKind alias for back-compat', function () {
-    $instance = new class
-    {
-        use HasKind;
-    };
-
-    $instance->setKind('deployment');
-
-    expect($instance->getPlurarKind())->toBe('deployments');
-});
-
 it('uses an explicit plural override when set', function () {
     $instance = new class
     {

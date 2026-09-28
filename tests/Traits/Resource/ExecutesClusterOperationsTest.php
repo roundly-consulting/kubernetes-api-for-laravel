@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\Exceptions\KubernetesException;
-use RoundlyConsulting\KubernetesApi\Kubernetes;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 use RoundlyConsulting\KubernetesApi\Resources\ResourcesCollection;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\ExecutesClusterOperations;
@@ -16,10 +16,10 @@ beforeEach(function () {
     $this->resource = Deployment::make()->setNamespace('production');
 
     $this->resource->setCluster(
-        Kubernetes::make()
+        Cluster::make()
             ->url('https://localhost')
             ->withToken('secret')
-            ->setManagerName('Pest Tests')
+            ->withManagerName('Pest Tests')
     );
 
     Http::preventStrayRequests();
