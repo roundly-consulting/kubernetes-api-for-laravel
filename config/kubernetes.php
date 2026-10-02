@@ -42,11 +42,12 @@ return [
 
     /*
      * `options` are Laravel HTTP client (Guzzle) options merged into every request.
-     * Their `timeout` bounds ordinary requests; it does NOT apply to streams — a watch,
-     * `streamLogs()` or `exec()` may legitimately sit silent for minutes. Streams use
-     * `stream_timeout` instead: the seconds of silence after which the stream ends
-     * cleanly (0 = wait indefinitely, like kubectl; the apiserver still closes a watch
-     * after its own timeout).
+     * Their `timeout` bounds ordinary requests. For a watch or `streamLogs()` it only
+     * bounds connecting and the response headers, because a stream may legitimately
+     * sit silent for minutes; `exec()` ignores it. Streams use `stream_timeout`
+     * instead: the seconds of silence after which the stream ends cleanly (0 = wait
+     * indefinitely, like kubectl; the apiserver still closes a watch after its own
+     * timeout).
      */
     'client' => [
         'options' => [

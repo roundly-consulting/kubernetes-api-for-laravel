@@ -164,7 +164,7 @@ return [
 | `clusters.<name>.kubeconfig` / `context` | `string\|null` | `null` | For the `kubeconfig` source: the file (null = `KUBECONFIG` or `~/.kube/config`) and context (null = `current-context`). |
 | `clusters.<name>.namespace` | `string` | `default` (`KUBERNETES_NAMESPACE`) | The default namespace for namespaced resources on this cluster. |
 | `clusters.<name>.manager` | `string\|null` | `null` (`KUBERNETES_MANAGER`) | Your app's field manager, sent as `fieldManager` on every write and as the user agent. A server-side apply without one uses `kubernetes-api-for-laravel`. It does not key the rate-limit budget (that is per apiserver). |
-| `client.options` | `array<string, mixed>` | `['timeout' => 5]` | Laravel HTTP client options merged into every request the package sends (timeout, proxy, etc.). The `timeout` bounds ordinary requests only. Streams (watches, `streamLogs()`, `exec()`) ignore it. |
+| `client.options` | `array<string, mixed>` | `['timeout' => 5]` | Laravel HTTP client options merged into every request the package sends (timeout, proxy, etc.). The `timeout` bounds ordinary requests. For watches and `streamLogs()` it bounds only connecting and the response headers; `exec()` ignores it. |
 | `client.stream_timeout` | `int` (seconds) | `0` (`KUBERNETES_STREAM_TIMEOUT`) | Idle timeout for streams: after this many seconds of silence a watch or log follow ends cleanly, and an unfinished `exec()` reports no exit code. `0` waits indefinitely, like kubectl. The apiserver still closes a watch after its own timeout. |
 | `rate_limits.enabled` | `bool` | `true` (`KUBERNETES_RATELIMIT_ENABLED`) | Toggle client-side rate limiting. `false` sends raw, unthrottled requests. |
 | `rate_limits.owner` | `string` | `app` (`KUBERNETES_RATELIMIT_OWNER`) | Namespaces the budget key, so several apps/workers can share (or isolate) a cluster budget. |
@@ -546,9 +546,10 @@ $cluster->pods()->whereLabel('app', 'checkout')->watch(function (WatchEvent $eve
 Each event reaches the callback as soon as the apiserver sends it. `watch()` returns when the
 stream ends. That happens when the apiserver closes the watch (it does so on its own timeout,
 usually after 30–60 minutes), or after `client.stream_timeout` seconds of silence if you set one.
-It is not cut off by the request `timeout` in `client.options`. A connection that breaks off
-mid-stream throws Laravel's `ConnectionException`. Long-lived watches suit queued or console
-contexts, not web requests. Re-open the watch in a loop if you need it to run forever.
+The request `timeout` in `client.options` only bounds connecting and the response headers. A
+connection that breaks off mid-stream throws Laravel's `ConnectionException`. Long-lived watches
+suit queued or console contexts, not web requests. Re-open the watch in a loop if you need it to
+run forever.
 
 ### Pod logs and exec
 
@@ -561,7 +562,7 @@ $logs = $cluster->pods()->withName('api')->logs(
 );
 
 // Stream logs line by line (tail). With follow: true it runs until the container stops
-// (or client.stream_timeout seconds pass with no output); the request timeout does not apply.
+// (or client.stream_timeout seconds pass with no output), not the request timeout.
 foreach ($cluster->pods()->withName('api')->streamLogs(new PodLogOptions(follow: true)) as $line) {
     echo $line . PHP_EOL;
 }
