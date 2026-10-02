@@ -115,3 +115,45 @@ it('speaks TLS for an https cluster', function (): void {
 
     expect($result->stdout)->toBe("hi\n")->and($result->exitCode)->toBe(0);
 });
+
+it('verifies TLS against an IPv6 cluster URL', function (): void {
+    $probe = @stream_socket_server('tcp://[::1]:0');
+
+    if ($probe === false) {
+        $this->markTestSkipped('No IPv6 loopback on this host.');
+    }
+
+    fclose($probe);
+    $this->server->stop();
+
+    // A certificate for the IP addresses themselves, as an in-cluster apiserver has.
+    $config = (string) tempnam(sys_get_temp_dir(), 'k8s-exec-cnf-');
+    file_put_contents($config, "[req]\ndistinguished_name = dn\n[dn]\n[ext]\nsubjectAltName = IP:::1, IP:127.0.0.1\nbasicConstraints = CA:TRUE\n");
+    $key = openssl_pkey_new(['private_key_bits' => 2048, 'config' => $config]);
+    $csr = openssl_csr_new(['commonName' => 'apiserver'], $key, ['config' => $config]);
+    $certificate = openssl_csr_sign($csr, null, $key, 1, ['config' => $config, 'x509_extensions' => 'ext']);
+    openssl_x509_export($certificate, $pem);
+    openssl_pkey_export($key, $keyPem, null, ['config' => $config]);
+    $both = (string) tempnam(sys_get_temp_dir(), 'k8s-exec-tls-');
+    $ca = (string) tempnam(sys_get_temp_dir(), 'k8s-exec-ca-');
+    file_put_contents($both, $pem.$keyPem);
+    file_put_contents($ca, $pem);
+
+    putenv("TLS_CERT={$both}");
+    putenv('BIND=[::]');
+    $this->server = LocalServer::script(__DIR__.'/../Fixtures/servers/exec.php');
+    putenv('TLS_CERT');
+    putenv('BIND');
+
+    try {
+        $result = Kubernetes::url("https://[::1]:{$this->server->port}")
+            ->withCaCertificate($ca)
+            ->pods()->setName('api')->exec(['ok']);
+    } finally {
+        unlink($config);
+        unlink($both);
+        unlink($ca);
+    }
+
+    expect($result->stdout)->toBe("hi\n")->and($result->exitCode)->toBe(0);
+});

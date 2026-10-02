@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 /*
  * A stand-in for the apiserver's exec WebSocket (`v4.channel.k8s.io`), plain TCP or —
- * with TLS_CERT set — TLS. Logs each request line and Host header, then plays the
- * scenario named by the first `command` argument:
+ * with TLS_CERT set — TLS, on 127.0.0.1 or the address in BIND. Logs each request line
+ * and Host header, then plays the scenario named by the first `command` argument:
  *
  *  - fast   101 + stdout + status (exit 7) + close in ONE write, as a quick apiserver or
  *           a TLS-terminating proxy delivers them
@@ -21,7 +21,10 @@ $cert = getenv('TLS_CERT');
 $transport = is_string($cert) && $cert !== '' ? 'ssl' : 'tcp';
 $context = stream_context_create($transport === 'ssl' ? ['ssl' => ['local_cert' => $cert, 'verify_peer' => false]] : []);
 
-$server = stream_socket_server("{$transport}://127.0.0.1:".getenv('PORT'), $errno, $error, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN, $context);
+$bind = getenv('BIND');
+$bind = is_string($bind) && $bind !== '' ? $bind : '127.0.0.1';
+
+$server = stream_socket_server("{$transport}://{$bind}:".getenv('PORT'), $errno, $error, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN, $context);
 
 if ($server === false) {
     exit(1);

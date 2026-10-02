@@ -76,6 +76,9 @@ final class ExecConnection
             'verify_peer' => $this->cluster->shouldVerify(),
             'verify_peer_name' => $this->cluster->shouldVerify(),
             'allow_self_signed' => ! $this->cluster->shouldVerify(),
+            // PHP would match the bracketed `[fd00::1]` against the certificate and never
+            // find the IPv6 address an in-cluster apiserver's certificate names.
+            'peer_name' => trim($host, '[]'),
         ]];
 
         if ($this->cluster->hasPathToCaCertificate()) {
