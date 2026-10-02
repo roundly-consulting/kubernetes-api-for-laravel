@@ -198,3 +198,78 @@ it('throws on invalid base64 certificate data', function () {
 
     (new KubeConfigLoader)->load($path);
 })->throws(KubeConfigException::class);
+
+it('resolves relative certificate paths against the kubeconfig directory, like kubectl', function () {
+    $dir = sys_get_temp_dir().'/kubecfg-dir-'.bin2hex(random_bytes(4));
+    mkdir($dir.'/certs', 0777, true);
+    $path = $dir.'/config';
+
+    file_put_contents($path, <<<'YAML'
+        apiVersion: v1
+        current-context: a
+        clusters:
+          - name: c
+            cluster:
+              server: https://x
+              certificate-authority: certs/ca.crt
+        users:
+          - name: u
+            user:
+              client-certificate: ./certs/client.crt
+              client-key: /etc/k8s/client.key
+        contexts:
+          - name: a
+            context:
+              cluster: c
+              user: u
+        YAML);
+
+    try {
+        $config = (new KubeConfigLoader)->load($path);
+
+        expect($config->certificateAuthorityPath)->toBe($dir.'/certs/ca.crt')
+            ->and($config->clientCertificatePath)->toBe($dir.'/certs/client.crt')
+            ->and($config->clientKeyPath)->toBe('/etc/k8s/client.key');
+    } finally {
+        @unlink($path);
+        @rmdir($dir.'/certs');
+        @rmdir($dir);
+    }
+});
+
+it('resolves relative certificate paths for a kubeconfig given by a relative path', function () {
+    $dir = sys_get_temp_dir().'/kubecfg-rel-'.bin2hex(random_bytes(4));
+    mkdir($dir, 0777, true);
+    file_put_contents($dir.'/config', <<<'YAML'
+        apiVersion: v1
+        current-context: a
+        clusters:
+          - name: c
+            cluster:
+              server: https://x
+              certificate-authority: ca.crt
+        users:
+          - name: u
+            user:
+              client-key: C:\keys\client.key
+        contexts:
+          - name: a
+            context:
+              cluster: c
+              user: u
+        YAML);
+
+    $cwd = (string) getcwd();
+    chdir(dirname($dir));
+
+    try {
+        $config = (new KubeConfigLoader)->load(basename($dir).'/config');
+
+        expect($config->certificateAuthorityPath)->toBe(getcwd().'/'.basename($dir).'/ca.crt')
+            ->and($config->clientKeyPath)->toBe('C:\keys\client.key');
+    } finally {
+        chdir($cwd);
+        @unlink($dir.'/config');
+        @rmdir($dir);
+    }
+});

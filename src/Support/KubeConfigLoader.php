@@ -11,7 +11,8 @@ use Symfony\Component\Yaml\Yaml;
 /**
  * Parses a kubeconfig file and resolves a named context into a {@see KubeConfig},
  * materialising any inline `*-data` PEM blocks to temp files so the HTTP client
- * can consume them as paths.
+ * can consume them as paths. Relative certificate paths are resolved against the
+ * kubeconfig's own directory, as kubectl does.
  */
 final class KubeConfigLoader
 {
@@ -60,15 +61,34 @@ final class KubeConfigLoader
         }
 
         $insecure = (bool) ($cluster['insecure-skip-tls-verify'] ?? false);
+        $directory = $this->directoryOf($path);
 
         return new KubeConfig(
             server: $server,
             token: $this->resolveToken($user),
-            clientCertificatePath: $this->resolvePem($user, 'client-certificate', 'client-certificate-data', 'crt'),
-            clientKeyPath: $this->resolvePem($user, 'client-key', 'client-key-data', 'key'),
-            certificateAuthorityPath: $this->resolvePem($cluster, 'certificate-authority', 'certificate-authority-data', 'ca'),
+            clientCertificatePath: $this->resolvePem($user, 'client-certificate', 'client-certificate-data', 'crt', $directory),
+            clientKeyPath: $this->resolvePem($user, 'client-key', 'client-key-data', 'key', $directory),
+            certificateAuthorityPath: $this->resolvePem($cluster, 'certificate-authority', 'certificate-authority-data', 'ca', $directory),
             verify: ! $insecure,
         );
+    }
+
+    /**
+     * The kubeconfig's directory as an absolute path: the base its relative
+     * certificate paths are resolved against (kubectl semantics, not the CWD).
+     */
+    private function directoryOf(string $path): string
+    {
+        $directory = dirname($path);
+
+        return $this->isAbsolute($directory) ? $directory : rtrim((string) getcwd(), '/\\').'/'.$directory;
+    }
+
+    private function isAbsolute(string $path): bool
+    {
+        return str_starts_with($path, '/')
+            || str_starts_with($path, '\\')
+            || preg_match('#^[A-Za-z]:[\\\\/]#', $path) === 1;
     }
 
     private function defaultPath(): string
@@ -109,17 +129,26 @@ final class KubeConfigLoader
     }
 
     /**
-     * Resolve a PEM either from a file reference (`*`) or an inline base64
-     * `*-data` block, writing inline data to a temp file and returning its path.
+     * Resolve a PEM either from a file reference (`*`, relative to the kubeconfig's
+     * directory unless absolute) or an inline base64 `*-data` block, writing inline
+     * data to a temp file and returning its path.
      *
      * @param  array<string, mixed>  $source
      */
-    private function resolvePem(array $source, string $fileKey, string $dataKey, string $suffix): ?string
+    private function resolvePem(array $source, string $fileKey, string $dataKey, string $suffix, string $directory): ?string
     {
         $file = $source[$fileKey] ?? null;
 
         if (is_string($file) && $file !== '') {
-            return $file;
+            if ($this->isAbsolute($file)) {
+                return $file;
+            }
+
+            while (str_starts_with($file, './')) {
+                $file = substr($file, 2);
+            }
+
+            return rtrim($directory, '/\\').'/'.$file;
         }
 
         $data = $source[$dataKey] ?? null;
