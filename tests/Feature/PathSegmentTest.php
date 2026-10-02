@@ -8,6 +8,7 @@ use RoundlyConsulting\KubernetesApi\Exceptions\InvalidResourceException;
 use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 use RoundlyConsulting\KubernetesApi\Resources\Pod;
+use RoundlyConsulting\KubernetesApi\Tests\Fixtures\LocalServer;
 
 /*
  * Every value that becomes a URL path segment — the name, the namespace, the plural and
@@ -107,4 +108,28 @@ it('still reaches ordinary names, namespaces and groups', function (): void {
 
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://k8s.example/apis/apps/v1/namespaces/shop-2/deployments/web.v1-2?pretty=1');
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://k8s.example/apis/traefik.io/v1alpha1/namespaces/edge/ingressroutes/app?pretty=1');
+});
+
+it('keeps a scoped request in its namespace on the wire', function (): void {
+    Http::preventStrayRequests(false);
+    $server = LocalServer::http(__DIR__.'/../Fixtures/servers/apiserver.php');
+
+    try {
+        $shop = Kubernetes::url($server->url())->withToken('t')->namespace('shop');
+
+        expect(fn () => $shop->secrets()->withName('../../kube-system/secrets/admin-token')->find())
+            ->toThrow(InvalidResourceException::class)
+            ->and(fn () => $shop->secrets()->withName('../../kube-system/secrets/admin-token')->delete())
+            ->toThrow(InvalidResourceException::class);
+
+        $shop->secrets()->withName('a?b#c')->find();
+        $shop->secrets()->withName('..x')->find();
+
+        expect($server->requests())->toBe([
+            'GET /api/v1/namespaces/shop/secrets/a%3Fb%23c?pretty=1',
+            'GET /api/v1/namespaces/shop/secrets/..x?pretty=1',
+        ]);
+    } finally {
+        $server->stop();
+    }
 });
