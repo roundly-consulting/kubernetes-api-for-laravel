@@ -306,9 +306,13 @@ $cluster = Kubernetes::url('https://127.0.0.1:6443')
 Point the client at a cluster in one line instead of hand-wiring the URL and credentials.
 `fromKubeConfig()` parses the kubeconfig, resolves the named context's cluster and user, and
 materialises any inline certificate data to private temp files (one per distinct PEM, removed
-when the PHP process exits). Relative certificate paths
-(`certificate-authority: certs/ca.crt`) resolve against the kubeconfig's own directory, as
-kubectl does. `inCluster()` reads the service-account credentials mounted into a pod.
+when the PHP process exits). Relative certificate paths (`certificate-authority: certs/ca.crt`)
+resolve against the kubeconfig's own directory, as kubectl does.
+
+`inCluster()` reads the service-account token and CA mounted into a pod, and the
+`KUBERNETES_SERVICE_HOST`/`KUBERNETES_SERVICE_PORT` env (IPv6 hosts included). TLS verification
+stays on: if the CA file is missing it throws `KubeConfigException` rather than send the token to
+an unverified apiserver.
 
 ```php
 use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
@@ -411,6 +415,9 @@ Operations use Laravel's HTTP client. In your tests, prefer `Kubernetes::fake()`
 [Testing your app](#testing-your-app)); `Http::fake()` still works too.
 
 ```php
+use RoundlyConsulting\KubernetesApi\Resources\Pod;
+use RoundlyConsulting\KubernetesApi\Resources\Types\Container;
+
 $cluster = Kubernetes::cluster('production');
 
 // List every deployment — returns a ResourcesCollection of Deployment resources.
@@ -422,10 +429,17 @@ $cluster->deployments()->withName('checkout')->find();
 // Check existence — returns a boolean.
 $cluster->deployments()->withName('checkout')->existsOnCluster();
 
-// Create a deployment.
+// Create a deployment. The apiserver requires a pod selector and a pod template whose
+// labels match it.
+$template = Pod::make()
+    ->setLabels(['app' => 'checkout'])
+    ->setContainers([Container::make()->setName('app')->setImage('nginx', '1.27-alpine')]);
+
 $deployment = $cluster->deployments()
     ->setName('checkout')
     ->setReplicas(3)
+    ->setPodsSelectors(['app' => 'checkout'])
+    ->setTemplate($template)
     ->create();
 
 $deployment->wasRecentlyCreated(); // true
@@ -438,10 +452,13 @@ $cluster->deployments()
     ->setReplicas(5)
     ->update();
 
-// Update if it exists, otherwise create it.
+// Update if it exists, otherwise create it. The update replaces the whole object, so send
+// the full manifest, not just the fields you change.
 $cluster->deployments()
-    ->withName('checkout')
+    ->setName('checkout')
     ->setReplicas(2)
+    ->setPodsSelectors(['app' => 'checkout'])
+    ->setTemplate($template)
     ->updateOrCreate();
 
 // Delete a deployment.
@@ -526,12 +543,12 @@ $cluster->pods()->whereLabel('app', 'checkout')->watch(function (WatchEvent $eve
 });
 ```
 
-`watch()` returns when the stream ends. That happens when the apiserver closes the watch (it
-does so on its own timeout, usually after 30–60 minutes), or after `client.stream_timeout`
-seconds of silence if you set one. It is not cut off by the request `timeout` in
-`client.options`. A connection that breaks off mid-stream throws Laravel's `ConnectionException`.
-Long-lived watches suit queued or console contexts, not web requests. Re-open the watch in a
-loop if you need it to run forever.
+Each event reaches the callback as soon as the apiserver sends it. `watch()` returns when the
+stream ends. That happens when the apiserver closes the watch (it does so on its own timeout,
+usually after 30–60 minutes), or after `client.stream_timeout` seconds of silence if you set one.
+It is not cut off by the request `timeout` in `client.options`. A connection that breaks off
+mid-stream throws Laravel's `ConnectionException`. Long-lived watches suit queued or console
+contexts, not web requests. Re-open the watch in a loop if you need it to run forever.
 
 ### Pod logs and exec
 
@@ -636,8 +653,10 @@ $cluster->networkPolicies()
     ->create();
 ```
 
-The same applies to `Service::setSelectors([])` and the workload pod selectors
-(`Deployment`, `ReplicaSet`, `StatefulSet`, `DaemonSet`, `ReplicationController`).
+`Service::setSelectors([])` serialises the same way. Workload pod selectors are different: the
+apiserver refuses an empty selector on `apps/v1` workloads (`Deployment`, `ReplicaSet`,
+`StatefulSet`, `DaemonSet`), so always give them at least one label, as in
+`setPodsSelectors(['app' => 'checkout'])`.
 
 ### Traefik TLS and transport CRDs
 
@@ -854,9 +873,9 @@ $fake->assertCreated('configMaps', fn (RecordedRequest $request): bool => $reque
 Clusters registered before `fake()` carry over, and their definitions still run; under the fake
 `fromKubeConfig()` / `inCluster()` (and `kubeconfig` / `in-cluster` config sources) never read
 credentials. Like the apiserver, the fake answers a server-side apply without `fieldManager`, or
-`force` on any other patch type, with a 422. Approximations: strategic-merge and
-server-side-apply patches are applied as JSON merge patches, and logs/exec answer for any pod. Clusters built without the manager
-(`new Cluster`, `Cluster::make()`) bypass the fake.
+`force` on any other patch type, with a 422. Approximations: strategic-merge and server-side-apply
+patches are applied as JSON merge patches, and logs/exec answer for any pod. Clusters built
+without the manager (`new Cluster`, `Cluster::make()`) bypass the fake.
 
 ## Testing
 
