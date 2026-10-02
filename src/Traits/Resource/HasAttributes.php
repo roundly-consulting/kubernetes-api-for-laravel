@@ -7,6 +7,7 @@ namespace RoundlyConsulting\KubernetesApi\Traits\Resource;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Illuminate\Support\Traits\Macroable;
+use RoundlyConsulting\KubernetesApi\Resources\Types\EmptyObject;
 
 trait HasAttributes
 {
@@ -45,9 +46,15 @@ trait HasAttributes
         );
     }
 
+    /**
+     * An empty object (`{}`, stored as an {@see EmptyObject} marker so it encodes back
+     * as `{}`) reads as the empty array it stands for.
+     */
     public function getAttribute(string $name, mixed $default = null): mixed
     {
-        return Arr::get($this->attributes, $name, $default);
+        $value = Arr::get($this->attributes, $name, $default);
+
+        return $value instanceof EmptyObject ? [] : $value;
     }
 
     /** @param string|array<int, string> $name */
@@ -89,7 +96,9 @@ trait HasAttributes
             return $this->original;
         }
 
-        return Arr::get($this->original, $key, $default);
+        $value = Arr::get($this->original, $key, $default);
+
+        return $value instanceof EmptyObject ? [] : $value;
     }
 
     public function discardChanges(): static

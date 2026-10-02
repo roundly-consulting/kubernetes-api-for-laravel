@@ -31,15 +31,9 @@ trait HasSelectors
     /** @return array<string, string> */
     public function getSelectors(): array
     {
-        $selector = $this->getSpec('selector', []);
-
-        // An empty selector is stored as an EmptyObject marker so it serialises
-        // to `{}`; surface it to callers as the empty array they set.
-        if ($selector instanceof EmptyObject) {
-            return [];
-        }
-
-        return $selector;
+        // An empty selector is stored as an EmptyObject marker so it serialises to
+        // `{}`; attribute reads surface it as the empty array that was set.
+        return $this->getSpec('selector', []);
     }
 
     /**

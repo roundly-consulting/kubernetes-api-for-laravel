@@ -39,7 +39,7 @@ trait CanRolloutRestart
         );
 
         return $this
-            ->newInstance((array) $response->json())
+            ->newInstance($this->decodeResponse($response))
             ->markAsExisting();
     }
 }

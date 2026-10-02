@@ -15,6 +15,7 @@ use RoundlyConsulting\KubernetesApi\Http\StreamLines;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
 use RoundlyConsulting\KubernetesApi\Resources\ResourcesCollection;
 use RoundlyConsulting\KubernetesApi\Resources\Types\Type;
+use RoundlyConsulting\KubernetesApi\Support\JsonPayload;
 
 trait ExecutesClusterOperations
 {
@@ -46,12 +47,11 @@ trait ExecutesClusterOperations
             payload: $this->payload(),
         );
 
-        $items = (array) $response->json('items', []);
+        $items = (array) ($this->decodeResponse($response)['items'] ?? []);
 
         $collection = ResourcesCollection::make(
             items: collect($items)->map(
-                /** @param array<string, mixed> $item */
-                fn (array $item): Resource => $this->newInstance($item)->markAsExisting(),
+                fn (mixed $item): Resource => $this->newInstance(is_array($item) ? $item : [])->markAsExisting(),
             )
         );
 
@@ -108,7 +108,7 @@ trait ExecutesClusterOperations
             payload: $this->payload(),
         );
 
-        return $this->newInstance((array) $response->json())->markAsExisting();
+        return $this->newInstance($this->decodeResponse($response))->markAsExisting();
     }
 
     /** @param array<string, mixed> $query */
@@ -122,7 +122,7 @@ trait ExecutesClusterOperations
         );
 
         return $this
-            ->newInstance((array) $response->json())
+            ->newInstance($this->decodeResponse($response))
             ->markAsRecentlyCreated()
             ->markAsExisting();
     }
@@ -138,7 +138,7 @@ trait ExecutesClusterOperations
         );
 
         return $this
-            ->newInstance((array) $response->json())
+            ->newInstance($this->decodeResponse($response))
             ->markAsExisting();
     }
 
@@ -190,7 +190,7 @@ trait ExecutesClusterOperations
         );
 
         return $this
-            ->newInstance((array) $response->json())
+            ->newInstance($this->decodeResponse($response))
             ->markAsExisting();
     }
 
@@ -212,7 +212,7 @@ trait ExecutesClusterOperations
         );
 
         return $this
-            ->newInstance((array) $response->json())
+            ->newInstance($this->decodeResponse($response))
             ->markAsExisting(false);
     }
 
@@ -276,12 +276,12 @@ trait ExecutesClusterOperations
                 continue;
             }
 
-            /** @var array{type?: string, object?: array<string, mixed>} $decoded */
-            $decoded = (array) json_decode($line, true);
+            $decoded = JsonPayload::decode($line);
+            $object = $decoded['object'] ?? null;
 
             $onEvent(new WatchEvent(
                 type: is_string($decoded['type'] ?? null) ? $decoded['type'] : 'UNKNOWN',
-                object: $this->newInstance((array) ($decoded['object'] ?? []))->markAsExisting(),
+                object: $this->newInstance(is_array($object) ? $object : [])->markAsExisting(),
             ));
         }
     }
@@ -376,6 +376,18 @@ trait ExecutesClusterOperations
         }
 
         return $instance;
+    }
+
+    /**
+     * The response body as attributes, empty objects kept as `{}` markers so the
+     * resource can be written back unchanged.
+     *
+     * @return array<string, mixed>
+     */
+    protected function decodeResponse(Response $response): array
+    {
+        /** @var array<string, mixed> */
+        return JsonPayload::decode($response->body());
     }
 
     protected function payload(Resource|Type|null $value = null): string

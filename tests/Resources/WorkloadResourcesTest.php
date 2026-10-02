@@ -161,7 +161,7 @@ it('configures a replication controller', function () {
 it('serialises an empty replication controller selector as the empty object', function () {
     $rc = ReplicationController::make()->setName('legacy')->setPodsSelectors([]);
 
-    expect($rc->getSpec('selector'))
+    expect($rc->toArray()['spec']['selector'])
         ->toBeInstanceOf(EmptyObject::class)
         ->and($rc->getPodsSelectors())->toBe([]);
 

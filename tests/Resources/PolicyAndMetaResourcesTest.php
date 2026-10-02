@@ -87,7 +87,8 @@ it('configures a network policy', function () {
 it('serialises a select-all pod selector as the empty object', function () {
     $policy = NetworkPolicy::make()->setName('allow-all')->setPodSelector([]);
 
-    expect($policy->getSpec('podSelector'))->toBeInstanceOf(EmptyObject::class)
+    expect($policy->toArray()['spec']['podSelector'])->toBeInstanceOf(EmptyObject::class)
+        ->and($policy->getSpec('podSelector'))->toBe([])
         ->and($policy->getPodSelector())->toBe([]);
 
     $json = $policy->toJson();
@@ -101,7 +102,7 @@ it('replaces a labelled pod selector when reset to select-all', function () {
         ->setPodSelector(['app' => 'api'])
         ->setPodSelector([]);
 
-    expect($policy->getSpec('podSelector'))->toBeInstanceOf(EmptyObject::class)
+    expect($policy->toArray()['spec']['podSelector'])->toBeInstanceOf(EmptyObject::class)
         ->and($policy->getSpec('podSelector.matchLabels'))->toBeNull();
 });
 

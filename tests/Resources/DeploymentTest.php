@@ -154,7 +154,7 @@ it('sets pods selectors', function () {
 it('serialises an empty pod selector as the empty object', function () {
     $deployment = Deployment::make()->setName('app')->setPodsSelectors([]);
 
-    expect($deployment->getSpec('selector'))
+    expect($deployment->toArray()['spec']['selector'])
         ->toBeInstanceOf(EmptyObject::class)
         ->and($deployment->getPodsSelectors())->toBe([]);
 
