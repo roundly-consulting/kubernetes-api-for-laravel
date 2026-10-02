@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Http;
 
+use GuzzleHttp\Psr7\Stream;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -70,7 +71,9 @@ final class HttpTransport implements Transport
         // The limiter callback returns the raw Response (429 and all) so hcrl's
         // adaptive path can read the apiserver's `Retry-After` header before the
         // cluster converts a failed response into an exception.
-        return $this->throttled($cluster, fn (): Response => $request->send($method, $url));
+        $response = $this->throttled($cluster, fn (): Response => $request->send($method, $url));
+
+        return $stream ? $this->armIdleTimeout($response) : $response;
     }
 
     public function exec(Cluster $cluster, string $path): ExecResult
@@ -80,21 +83,51 @@ final class HttpTransport implements Transport
 
     /**
      * A watch or a log follow is long-lived and may sit silent for minutes, so the
-     * request-wide `timeout` must not cut it off. It gets no overall deadline and an
-     * idle read timeout only when `kubernetes.client.stream_timeout` sets one (-1 is
-     * PHP's "wait indefinitely"); when it passes the stream ends cleanly.
+     * request-wide `timeout` must not cut it off: the stream gets no overall deadline.
+     * Connecting and the response headers stay bounded by that timeout, as an idle
+     * read timeout; {@see armIdleTimeout()} swaps it for the stream's own once the
+     * headers are in.
      *
      * @return array<string, mixed>
      */
     private function streamOptions(): array
     {
-        $idle = self::streamTimeout();
+        $options = ['stream' => true, 'timeout' => 0];
+        $timeout = config('kubernetes.client.options.timeout');
 
-        return [
-            'stream' => true,
-            'timeout' => 0,
-            'read_timeout' => $idle > 0 ? $idle : -1,
-        ];
+        if (is_numeric($timeout) && $timeout > 0) {
+            $options['read_timeout'] = (float) $timeout;
+        }
+
+        return $options;
+    }
+
+    /**
+     * Give a streamed body's socket the stream idle timeout: `client.stream_timeout`
+     * seconds, or none at all (PHP's -1) by default — when it passes the stream ends
+     * cleanly. Set on the socket itself, because Guzzle 7 and 8 disagree on what a
+     * `read_timeout` of 0 means. A body without a socket (a faked response) is left
+     * as it is.
+     */
+    private function armIdleTimeout(Response $response): Response
+    {
+        $psr = $response->toPsrResponse();
+        $body = $psr->getBody();
+
+        if (! $body instanceof Stream || $body->isSeekable()) {
+            return $response;
+        }
+
+        $socket = $body->detach();
+
+        if (! is_resource($socket)) {
+            return $response;
+        }
+
+        $idle = self::streamTimeout();
+        stream_set_timeout($socket, $idle > 0 ? $idle : -1);
+
+        return new Response($psr->withBody(new Stream($socket)));
     }
 
     /**

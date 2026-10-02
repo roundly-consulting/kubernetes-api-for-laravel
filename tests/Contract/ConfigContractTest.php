@@ -41,17 +41,14 @@ it('ships exactly the config keys it reads', function (): void {
             'KubernetesManager.php' => ['$definition' => 'kubernetes.clusters.default'],
         ],
 
-        // The two genuine map-shaped reads, allowed per leaf rather than by excluding
-        // their parent wholesale — `allowUnread` is rot-proof, so a stale entry that
-        // silences nothing is itself a failure. Removing a resource from the config
-        // fails here until this list matches, which makes the list a live pin on the
-        // registered-resource surface rather than a blanket.
+        // The genuine map-shaped read, allowed per leaf rather than by excluding its
+        // parent wholesale — `allowUnread` is rot-proof, so a stale entry that silences
+        // nothing is itself a failure. Removing a resource from the config fails here
+        // until this list matches, which makes the list a live pin on the
+        // registered-resource surface rather than a blanket. (`client.options` is handed
+        // to Guzzle wholesale, but its `timeout` is also read by name: it bounds the
+        // connect and header phase of a stream.)
         'allowUnread' => [
-            // `client.options` is handed to Guzzle wholesale via `withOptions()`. The
-            // leaf is applied, never read by name — Guzzle owns the key vocabulary, and
-            // enumerating it here would be inventing a contract we do not define.
-            'kubernetes.client.options.timeout',
-
             // The resource registry is a MAP, not a group of keys: its leaves are
             // resource *names* the provider iterates (`foreach ($resources as $name =>
             // $class)`) and registers by name. Nothing reads
