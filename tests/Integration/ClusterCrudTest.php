@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubernetesPatch;
+use RoundlyConsulting\KubernetesApi\DataTransferObjects\WatchEvent;
 use RoundlyConsulting\KubernetesApi\Exceptions\KubernetesException;
 use RoundlyConsulting\KubernetesApi\Resources\ConfigMap;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
@@ -178,3 +180,59 @@ it('filters config maps by label and paginates', function () {
 it('maps a missing resource to a not-found exception', function () {
     ConfigMap::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('nope')->find();
 })->throws(KubernetesException::class);
+
+it('writes a found deployment back unchanged, empty objects included', function () {
+    $deployment = fn (): Deployment => Deployment::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('roundtrip');
+
+    $deployment()
+        ->setReplicas(1)
+        ->setPodsSelectors(['app' => 'roundtrip'])
+        ->setTemplate(Pod::make()->setLabels(['app' => 'roundtrip'])->setContainers([Container::make()->setName('web')->setImage('nginx', 'alpine')]))
+        ->create();
+
+    // The apiserver fills in `resources: {}` and `securityContext: {}`; both must go back as
+    // objects. The controller's own status writes can win the race, hence the 409 retry.
+    $updated = retry(
+        5,
+        fn (): Deployment => $deployment()->find()->setReplicas(2)->update(),
+        300,
+        fn (Throwable $e): bool => $e instanceof KubernetesException && $e->response->status() === 409,
+    );
+
+    expect($updated->getReplicas())->toBe(2);
+});
+
+it('server-side applies with the manager name as the field manager', function () {
+    ConfigMap::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('applied')->setData(['a' => '1'])->create();
+
+    $applied = ConfigMap::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('applied')
+        ->patch(KubernetesPatch::apply([
+            'apiVersion' => 'v1',
+            'kind' => 'ConfigMap',
+            'metadata' => ['name' => 'applied'],
+            'data' => ['nginx.conf' => 'events {}'],
+        ], force: true));
+
+    $managers = collect($applied->getAttribute('metadata.managedFields', []))
+        ->map(fn (array $entry): string => $entry['manager'].':'.$entry['operation'])
+        ->all();
+
+    expect($managers)->toContain('k8s-integration-tests:Apply')
+        ->and($applied->getData('nginx.conf'))->toBe('events {}');
+});
+
+it('hands watch events over as they arrive and ends on the idle timeout', function () {
+    config()->set('kubernetes.client.stream_timeout', 2);
+
+    $started = microtime(true);
+    $arrivals = [];
+
+    ConfigMap::make()->setCluster($this->cluster)->setNamespace($this->ns)
+        ->watch(function (WatchEvent $event) use (&$arrivals, $started): void {
+            $arrivals[] = microtime(true) - $started;
+        });
+
+    expect($arrivals)->not->toBeEmpty()
+        ->and($arrivals[0])->toBeLessThan(1.5)
+        ->and(microtime(true) - $started)->toBeLessThan(5.0);
+});
