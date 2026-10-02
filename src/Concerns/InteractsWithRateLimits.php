@@ -98,7 +98,7 @@ trait InteractsWithRateLimits
         $parts = parse_url($url);
 
         if (! is_array($parts) || ($parts['host'] ?? '') === '') {
-            return $url !== '' ? substr(hash('sha256', $url), 0, 12) : 'default';
+            return $url !== '' ? $url : 'default';
         }
 
         $key = strtolower((string) $parts['host']);

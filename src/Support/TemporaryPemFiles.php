@@ -17,7 +17,7 @@ use RoundlyConsulting\KubernetesApi\Exceptions\KubeConfigException;
  */
 final class TemporaryPemFiles
 {
-    /** @var array<string, string> content hash => temp file path */
+    /** @var array<string, string> suffix + PEM contents => temp file path */
     private static array $files = [];
 
     private static bool $cleanupRegistered = false;
@@ -29,10 +29,10 @@ final class TemporaryPemFiles
      */
     public static function for(string $contents, string $suffix): string
     {
-        $hash = hash('sha256', "{$suffix}\0{$contents}");
+        $key = "{$suffix}\0{$contents}";
 
-        if (isset(self::$files[$hash]) && is_file(self::$files[$hash])) {
-            return self::$files[$hash];
+        if (isset(self::$files[$key]) && is_file(self::$files[$key])) {
+            return self::$files[$key];
         }
 
         $path = tempnam(sys_get_temp_dir(), "k8s-{$suffix}-");
@@ -54,7 +54,7 @@ final class TemporaryPemFiles
             self::$cleanupRegistered = true;
         }
 
-        return self::$files[$hash] = $path;
+        return self::$files[$key] = $path;
     }
 
     /**

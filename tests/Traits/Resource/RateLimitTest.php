@@ -203,7 +203,7 @@ it('names a registered cluster by its name on the fail-fast exception', function
         ->toThrow(RateLimitExceededException::class, 'Rate limit for cluster [production] exceeded.');
 });
 
-it('keys a cluster without a parsable host by a hash of its url', function () {
+it('keys a cluster without a parsable host by its url', function () {
     $fake = RateLimits::fake();
     Http::fake(['*' => Http::response(['items' => []])]);
 
@@ -215,5 +215,5 @@ it('keys a cluster without a parsable host by a hash of its url', function () {
         // only the key matters
     }
 
-    $fake->assertAllowed('k8s:app:'.substr(hash('sha256', 'localhost'), 0, 12));
+    $fake->assertAllowed('k8s:app:localhost');
 });
