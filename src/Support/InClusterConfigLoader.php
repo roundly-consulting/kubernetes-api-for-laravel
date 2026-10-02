@@ -42,11 +42,22 @@ final class InClusterConfigLoader
             throw new KubeConfigException('Service-account token is empty.');
         }
 
+        // The service-account token must never travel over unverified TLS: without the
+        // mounted cluster CA there is nothing to verify the apiserver against.
+        if (! is_file($this->caPath)) {
+            throw new KubeConfigException("Service-account CA certificate not found at {$this->caPath}.");
+        }
+
+        // An IPv6 service host goes in brackets, or the URL's port is ambiguous.
+        if (str_contains($host, ':') && ! str_starts_with($host, '[')) {
+            $host = "[{$host}]";
+        }
+
         return new KubeConfig(
             server: "https://{$host}:{$port}",
             token: trim($token),
-            certificateAuthorityPath: is_file($this->caPath) ? $this->caPath : null,
-            verify: is_file($this->caPath),
+            certificateAuthorityPath: $this->caPath,
+            verify: true,
         );
     }
 }
