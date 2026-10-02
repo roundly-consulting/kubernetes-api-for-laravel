@@ -131,7 +131,8 @@ final class KubeConfigLoader
     /**
      * Resolve a PEM either from a file reference (`*`, relative to the kubeconfig's
      * directory unless absolute) or an inline base64 `*-data` block, writing inline
-     * data to a temp file and returning its path.
+     * data to a private temp file (one per distinct PEM, removed when the process
+     * exits) and returning its path.
      *
      * @param  array<string, mixed>  $source
      */
@@ -163,14 +164,6 @@ final class KubeConfigLoader
             throw new KubeConfigException("Invalid base64 in kubeconfig '{$dataKey}'.");
         }
 
-        $tempPath = tempnam(sys_get_temp_dir(), "k8s-{$suffix}-");
-
-        if ($tempPath === false) {
-            throw new KubeConfigException('Unable to create temp file for kubeconfig PEM.');
-        }
-
-        file_put_contents($tempPath, $decoded);
-
-        return $tempPath;
+        return TemporaryPemFiles::for($decoded, $suffix);
     }
 }

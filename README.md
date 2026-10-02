@@ -305,7 +305,8 @@ $cluster = Kubernetes::url('https://127.0.0.1:6443')
 
 Point the client at a cluster in one line instead of hand-wiring the URL and credentials.
 `fromKubeConfig()` parses the kubeconfig, resolves the named context's cluster and user, and
-materialises any inline certificate data to temp files. Relative certificate paths
+materialises any inline certificate data to private temp files (one per distinct PEM, removed
+when the PHP process exits). Relative certificate paths
 (`certificate-authority: certs/ca.crt`) resolve against the kubeconfig's own directory, as
 kubectl does. `inCluster()` reads the service-account credentials mounted into a pod.
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use RoundlyConsulting\KubernetesApi\Exceptions\KubeConfigException;
 use RoundlyConsulting\KubernetesApi\Support\KubeConfigLoader;
+use RoundlyConsulting\KubernetesApi\Support\TemporaryPemFiles;
 
 function writeKubeConfig(string $yaml): string
 {
@@ -271,5 +272,83 @@ it('resolves relative certificate paths for a kubeconfig given by a relative pat
         chdir($cwd);
         @unlink($dir.'/config');
         @rmdir($dir);
+    }
+});
+
+function inlineKeyKubeConfig(string $key = 'CLIENT-KEY'): string
+{
+    $key = base64_encode($key);
+
+    return writeKubeConfig(<<<YAML
+        apiVersion: v1
+        current-context: a
+        clusters:
+          - name: c
+            cluster:
+              server: https://x
+        users:
+          - name: u
+            user:
+              client-certificate-data: Q0VSVA==
+              client-key-data: {$key}
+        contexts:
+          - name: a
+            context:
+              cluster: c
+              user: u
+        YAML);
+}
+
+it('reuses one private temp file per inline PEM instead of a new one per load', function () {
+    $path = inlineKeyKubeConfig();
+
+    try {
+        $first = (new KubeConfigLoader)->load($path);
+        $second = (new KubeConfigLoader)->load($path);
+        $other = (new KubeConfigLoader)->load($otherPath = inlineKeyKubeConfig('OTHER-KEY'));
+
+        expect($second->clientKeyPath)->toBe($first->clientKeyPath)
+            ->and($other->clientKeyPath)->not->toBe($first->clientKeyPath)
+            ->and(file_get_contents((string) $other->clientKeyPath))->toBe('OTHER-KEY')
+            ->and(fileperms((string) $first->clientKeyPath) & 0777)->toBe(0600);
+    } finally {
+        @unlink($path);
+        @unlink($otherPath ?? '');
+    }
+});
+
+it('removes the inline PEM temp files when the process exits', function () {
+    $path = inlineKeyKubeConfig('EXIT-KEY');
+    $script = 'require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).';'
+        .'$c = (new RoundlyConsulting\KubernetesApi\Support\KubeConfigLoader)->load($argv[1]);'
+        .'echo $c->clientKeyPath, "\n", is_file($c->clientKeyPath) ? "present" : "missing";';
+
+    try {
+        exec(implode(' ', array_map('escapeshellarg', [PHP_BINARY, '-r', $script, $path])), $output, $exit);
+
+        expect($exit)->toBe(0)
+            ->and($output[1] ?? null)->toBe('present')
+            ->and(is_file($output[0]))->toBeFalse();
+    } finally {
+        @unlink($path);
+    }
+});
+
+it('rewrites a temp PEM file that was removed and removes them all on demand', function () {
+    $path = inlineKeyKubeConfig('REMOVED-KEY');
+
+    try {
+        $key = (string) (new KubeConfigLoader)->load($path)->clientKeyPath;
+        unlink($key);
+
+        $again = (string) (new KubeConfigLoader)->load($path)->clientKeyPath;
+
+        expect(file_get_contents($again))->toBe('REMOVED-KEY');
+
+        TemporaryPemFiles::removeAll();
+
+        expect(is_file($again))->toBeFalse();
+    } finally {
+        @unlink($path);
     }
 });
