@@ -36,8 +36,13 @@ final class HttpTransport implements Transport
             throw ClusterConfigurationException::missingUrl($cluster->name());
         }
 
-        $request = Http::baseUrl($cluster->getUrl())
-            ->withHeaders(['Accept-Encoding' => 'gzip, deflate']);
+        $request = Http::baseUrl($cluster->getUrl());
+
+        // Streams stay uncompressed: a decoder in front of a watch or a log follow
+        // would buffer the events it should hand over as they arrive.
+        if (! $stream) {
+            $request->withHeaders(['Accept-Encoding' => 'gzip, deflate']);
+        }
 
         $manager = $cluster->getManagerName();
 

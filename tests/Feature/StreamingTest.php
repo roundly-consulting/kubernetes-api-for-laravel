@@ -61,3 +61,41 @@ it('ends a stream cleanly when the configured idle timeout passes', function ():
 it('still applies the request timeout to ordinary requests', function (): void {
     expect($this->cluster->pods()->setNamespace('shop')->setName('api')->find()->getName())->toBe('x');
 });
+
+it('delivers each event of a chunked tls stream as it arrives, not once 8 KiB have piled up', function (): void {
+    $this->server->stop();
+
+    $key = openssl_pkey_new(['private_key_bits' => 2048]);
+    $certificate = openssl_csr_sign(openssl_csr_new(['commonName' => '127.0.0.1'], $key), null, $key, 1);
+    openssl_x509_export($certificate, $pem);
+    openssl_pkey_export($key, $keyPem);
+    $path = (string) tempnam(sys_get_temp_dir(), 'k8s-stream-tls-');
+    file_put_contents($path, $pem.$keyPem);
+
+    putenv("TLS_CERT={$path}");
+    $this->server = LocalServer::script(__DIR__.'/../Fixtures/servers/chunked.php');
+    putenv('TLS_CERT');
+
+    $cluster = Kubernetes::url('https://127.0.0.1:'.$this->server->port)->withToken('t')->withoutSslVerification();
+
+    $started = microtime(true);
+    $arrivals = [];
+
+    $cluster->pods()->setNamespace('shop')->watch(function (WatchEvent $event) use (&$arrivals, $started): void {
+        $arrivals[$event->type] = microtime(true) - $started;
+    });
+
+    $lines = [];
+    $started = microtime(true);
+
+    foreach ($cluster->pods()->setNamespace('shop')->setName('api')->streamLogs(new PodLogOptions(follow: true)) as $line) {
+        $lines[$line] = microtime(true) - $started;
+    }
+
+    unlink($path);
+
+    expect(array_keys($arrivals))->toBe(['ADDED', 'MODIFIED'])
+        ->and($arrivals['ADDED'])->toBeLessThan(1.0)
+        ->and(array_keys($lines))->toBe(['first', 'second'])
+        ->and($lines['first'])->toBeLessThan(1.0);
+});
