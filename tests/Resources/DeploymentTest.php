@@ -34,22 +34,22 @@ it('belongs to the apps/v1 api group', function () {
     expect(Deployment::make()->getVersion())->toBe('apps/v1');
 });
 
-it('sets update strategy', function () {
+it('sets the update strategy on spec.strategy, the field a Deployment has', function () {
     $deployment = Deployment::make();
 
     $deployment->setUpdateStrategy('RollingUpdate');
 
-    expect($deployment->getSpec('updateStrategy'))->toBe([
+    expect($deployment->getSpec('strategy'))->toBe([
         'rollingUpdate' => [
             'maxUnavailable' => '25%',
             'maxSurge' => '25%',
         ],
         'type' => 'RollingUpdate',
-    ]);
+    ])->and($deployment->getSpec('updateStrategy'))->toBeNull();
 
     $deployment->setUpdateStrategy('RollingUpdate', '50%', '80%');
 
-    expect($deployment->getSpec('updateStrategy'))->toBe([
+    expect($deployment->getSpec('strategy'))->toBe([
         'rollingUpdate' => [
             'maxUnavailable' => '50%',
             'maxSurge' => '80%',
@@ -57,17 +57,17 @@ it('sets update strategy', function () {
         'type' => 'RollingUpdate',
     ]);
 
-    $deployment->setUpdateStrategy('OnDelete');
+    $deployment->setUpdateStrategy('Recreate');
 
-    expect($deployment->getSpec('updateStrategy'))->toBe([
-        'type' => 'OnDelete',
+    expect($deployment->getSpec('strategy'))->toBe([
+        'type' => 'Recreate',
     ]);
 });
 
 it('returns update strategy', function () {
     $deployment = Deployment::make([
         'spec' => [
-            'updateStrategy' => [
+            'strategy' => [
                 'rollingUpdate' => [
                     'maxUnavailable' => '25%',
                     'maxSurge' => '25%',

@@ -28,22 +28,27 @@ class Deployment extends Resource
 
     protected bool $usesNamespaces = true;
 
+    /**
+     * Set `spec.strategy` — `RollingUpdate` (with its surge limits) or `Recreate`. A
+     * Deployment's field is `strategy`; `updateStrategy` belongs to DaemonSets and
+     * StatefulSets, and an apiserver drops (or refuses) it here.
+     */
     public function setUpdateStrategy(string $strategy, string $maxUnavailable = '25%', string $maxSurge = '25%'): static
     {
-        $this->removeAttribute('spec.updateStrategy');
+        $this->removeAttribute('spec.strategy');
 
         if ($strategy === 'RollingUpdate') {
-            $this->setSpec('updateStrategy.rollingUpdate.maxUnavailable', $maxUnavailable);
-            $this->setSpec('updateStrategy.rollingUpdate.maxSurge', $maxSurge);
+            $this->setSpec('strategy.rollingUpdate.maxUnavailable', $maxUnavailable);
+            $this->setSpec('strategy.rollingUpdate.maxSurge', $maxSurge);
         }
 
-        return $this->setSpec('updateStrategy.type', $strategy);
+        return $this->setSpec('strategy.type', $strategy);
     }
 
     /** @return array<string, mixed> */
     public function getUpdateStrategy(): array
     {
-        return $this->getSpec('updateStrategy', []);
+        return (array) $this->getSpec('strategy', []);
     }
 
     /** @return array<int, array<string, mixed>> */
