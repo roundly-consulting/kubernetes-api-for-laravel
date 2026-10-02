@@ -7,6 +7,7 @@ use RoundlyConsulting\HttpClientRateLimits\Facades\RateLimits;
 use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\Exceptions\KubernetesException;
 use RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException;
+use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 use RoundlyConsulting\PackageToolkit\Contracts\HasRetryAfter;
 
@@ -35,7 +36,7 @@ it('paces every cluster request through the limiter and lets it through', functi
     $result = clusterResource()->get();
 
     expect($result)->not->toBeNull();
-    $fake->assertAllowed('k8s:app:Pest Tests');
+    $fake->assertAllowed('k8s:app:localhost');
 });
 
 it('defers a request once the per-cluster budget is exhausted', function () {
@@ -46,7 +47,7 @@ it('defers a request once the per-cluster budget is exhausted', function () {
     clusterResource()->get();
     clusterResource()->get();
 
-    $fake->assertDeferred('k8s:app:Pest Tests');
+    $fake->assertDeferred('k8s:app:localhost');
 });
 
 it('fails fast with a native exception when the wait exceeds max_wait', function () {
@@ -60,7 +61,7 @@ it('fails fast with a native exception when the wait exceeds max_wait', function
     expect(fn () => clusterResource()->get())
         ->toThrow(
             RateLimitExceededException::class,
-            'Rate limit for cluster [Pest Tests] exceeded.',
+            'Rate limit for cluster [localhost] exceeded.',
         );
 });
 
@@ -76,7 +77,7 @@ it('exposes the cluster and a retry-after hint on the fail-fast exception', func
         clusterResource()->get();
     } catch (RateLimitExceededException $e) {
         expect($e)->toBeInstanceOf(HasRetryAfter::class)
-            ->and($e->cluster)->toBe('Pest Tests')
+            ->and($e->cluster)->toBe('localhost')
             ->and($e->retryAfterSeconds())->toBeGreaterThan(0);
 
         return;
@@ -114,7 +115,7 @@ it('reads the apiserver 429 Retry-After so the next request self-throttles', fun
         // still a 429 from the fake — we only care that it was deferred first.
     }
 
-    $fake->assertDeferred('k8s:app:Pest Tests');
+    $fake->assertDeferred('k8s:app:localhost');
 });
 
 it('keeps a separate budget per cluster', function () {
@@ -125,12 +126,12 @@ it('keeps a separate budget per cluster', function () {
     clusterResource('Alpha', 'https://alpha.test')->get();
     clusterResource('Beta', 'https://beta.test')->get();
 
-    $fake->assertAllowed('k8s:app:Alpha')
-        ->assertAllowed('k8s:app:Beta')
+    $fake->assertAllowed('k8s:app:alpha.test')
+        ->assertAllowed('k8s:app:beta.test')
         ->assertNothingDeferred();
 });
 
-it('falls back to the request host when no manager name is set', function () {
+it('keys the budget by the apiserver host when no manager name is set', function () {
     $fake = RateLimits::fake();
     okListing();
 
@@ -157,6 +158,62 @@ it('counts a watch as a single hit, not one per event', function () {
     });
 
     expect($seen)->toBe(2);
-    $fake->assertAllowed('k8s:app:Pest Tests')
+    $fake->assertAllowed('k8s:app:localhost')
         ->assertNothingDeferred();
+});
+
+it('keeps separate budgets for clusters that share a manager name', function () {
+    config()->set('kubernetes.rate_limits.max_attempts', 1);
+    $fake = RateLimits::fake();
+    okListing();
+
+    clusterResource('my-app', 'https://prod.example:6443')->get();
+    clusterResource('my-app', 'https://staging.example:6443')->get();
+    clusterResource('my-app', 'https://rancher.example/k8s/clusters/c-abc')->get();
+    clusterResource('my-app', 'https://rancher.example/k8s/clusters/c-def/')->get();
+
+    $fake->assertAllowed('k8s:app:prod.example:6443')
+        ->assertAllowed('k8s:app:staging.example:6443')
+        ->assertAllowed('k8s:app:rancher.example/k8s/clusters/c-abc')
+        ->assertAllowed('k8s:app:rancher.example/k8s/clusters/c-def')
+        ->assertNothingDeferred();
+});
+
+it('shares one budget between clients of the same apiserver', function () {
+    config()->set('kubernetes.rate_limits.max_attempts', 1);
+    $fake = RateLimits::fake();
+    okListing();
+
+    clusterResource('worker-a', 'https://API.example:443')->get();
+    clusterResource('worker-b', 'https://api.example')->get();
+
+    $fake->assertDeferred('k8s:app:api.example');
+});
+
+it('names a registered cluster by its name on the fail-fast exception', function () {
+    config()->set('kubernetes.rate_limits.max_attempts', 1);
+    config()->set('kubernetes.rate_limits.max_wait', 0);
+    RateLimits::fake();
+    okListing();
+
+    Kubernetes::registerCluster('production', fn (Cluster $cluster): Cluster => $cluster->url('https://prod.example')->withToken('t'));
+    Kubernetes::cluster('production')->pods()->get();
+
+    expect(fn () => Kubernetes::cluster('production')->pods()->get())
+        ->toThrow(RateLimitExceededException::class, 'Rate limit for cluster [production] exceeded.');
+});
+
+it('keys a cluster without a parsable host by a hash of its url', function () {
+    $fake = RateLimits::fake();
+    Http::fake(['*' => Http::response(['items' => []])]);
+
+    $resource = Deployment::make()->setNamespace('production')->setCluster(Cluster::make()->url('localhost')->withToken('t'));
+
+    try {
+        $resource->get();
+    } catch (Throwable) {
+        // only the key matters
+    }
+
+    $fake->assertAllowed('k8s:app:'.substr(hash('sha256', 'localhost'), 0, 12));
 });

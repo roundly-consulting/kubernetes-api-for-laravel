@@ -57,9 +57,9 @@ return [
 
     /*
      * Client-side rate limiting for every apiserver request, powered by
-     * roundly-consulting/http-client-rate-limits. Each cluster gets its own
-     * budget (keyed by manager name or host), so one busy cluster never starves
-     * another. By default requests are *paced* (the limiter waits for the window
+     * roundly-consulting/http-client-rate-limits. Each apiserver gets its own
+     * budget (keyed by the cluster URL's host, port and path prefix), so one busy
+     * cluster never starves another. By default requests are *paced* (the limiter waits for the window
      * to free up); set `max_wait` to fail fast with a RateLimitExceededException
      * instead. With `adaptive` on, a 429 `Retry-After` from the apiserver
      * self-tunes the limiter. Set `enabled => false` for the raw, unthrottled

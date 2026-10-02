@@ -87,7 +87,7 @@ it('routes the ping probe through the cluster rate limiter', function () {
 
     $this->artisan('kubernetes:ping orbstack')->assertSuccessful();
 
-    $fake->assertAllowed('k8s:app:127.0.0.1');
+    $fake->assertAllowed('k8s:app:127.0.0.1:26443');
 });
 
 it('does not throttle the ping when rate limiting is disabled', function () {

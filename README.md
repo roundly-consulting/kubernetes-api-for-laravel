@@ -163,7 +163,7 @@ return [
 | `clusters.<name>.verify` | `bool` | `true` (`KUBERNETES_VERIFY_SSL`) | TLS verification. Only turn off for local development. |
 | `clusters.<name>.kubeconfig` / `context` | `string\|null` | `null` | For the `kubeconfig` source: the file (null = `KUBECONFIG` or `~/.kube/config`) and context (null = `current-context`). |
 | `clusters.<name>.namespace` | `string` | `default` (`KUBERNETES_NAMESPACE`) | The default namespace for namespaced resources on this cluster. |
-| `clusters.<name>.manager` | `string\|null` | `null` (`KUBERNETES_MANAGER`) | Your app's field manager, sent as `fieldManager` on every write and as the user agent. A server-side apply without one uses `kubernetes-api-for-laravel`. |
+| `clusters.<name>.manager` | `string\|null` | `null` (`KUBERNETES_MANAGER`) | Your app's field manager, sent as `fieldManager` on every write and as the user agent. A server-side apply without one uses `kubernetes-api-for-laravel`. It does not key the rate-limit budget (that is per apiserver). |
 | `client.options` | `array<string, mixed>` | `['timeout' => 5]` | Laravel HTTP client options merged into every request the package sends (timeout, proxy, etc.). The `timeout` bounds ordinary requests only. Streams (watches, `streamLogs()`, `exec()`) ignore it. |
 | `client.stream_timeout` | `int` (seconds) | `0` (`KUBERNETES_STREAM_TIMEOUT`) | Idle timeout for streams: after this many seconds of silence a watch or log follow ends cleanly, and an unfinished `exec()` reports no exit code. `0` waits indefinitely, like kubectl. The apiserver still closes a watch after its own timeout. |
 | `rate_limits.enabled` | `bool` | `true` (`KUBERNETES_RATELIMIT_ENABLED`) | Toggle client-side rate limiting. `false` sends raw, unthrottled requests. |
@@ -740,8 +740,10 @@ The package's other exceptions, all under `RoundlyConsulting\KubernetesApi\Excep
 
 Every apiserver request is paced through
 [`roundly-consulting/http-client-rate-limits-for-laravel`](https://github.com/roundly-consulting/http-client-rate-limits-for-laravel),
-keyed **per cluster** (by manager name, falling back to the request host) so one busy cluster never
-starves another. Kubernetes API Priority & Fairness is per-apiserver, so a per-cluster budget maps
+keyed **per apiserver**: the cluster URL's host, port and path prefix (so each cluster behind a
+Rancher-style proxy gets its own budget). One busy cluster never starves another, even when every
+client uses the same manager name. Clients of the same apiserver share one budget, whatever their
+manager name or credentials. Kubernetes API Priority & Fairness is per-apiserver, so this maps
 directly onto how the server enforces its own limits.
 
 By default the client makes up to **400 requests per minute** per cluster and **paces** anything
@@ -759,8 +761,9 @@ KUBERNETES_RATELIMIT_ADAPTIVE=true  # honour 429 Retry-After
 
 **Fail fast instead of waiting.** Set a `max_wait` ceiling (milliseconds). When a request would
 have to wait longer than that, it throws
-`RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException` (which exposes `->cluster`
-and, via the toolkit's `HasRetryAfter` contract, `->retryAfterSeconds()`) instead of blocking:
+`RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException` instead of blocking. It
+exposes `->cluster` (the registered cluster name, or the apiserver host for an ad-hoc client) and,
+via the toolkit's `HasRetryAfter` contract, `->retryAfterSeconds()`:
 
 ```php
 use RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException;

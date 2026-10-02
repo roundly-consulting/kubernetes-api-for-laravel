@@ -79,32 +79,35 @@ trait InteractsWithRateLimits
             return $response;
         } catch (HttpRateLimitExceededException $exception) {
             throw RateLimitExceededException::for(
-                cluster: $this->clusterKey($cluster),
+                cluster: $cluster->name() ?? $this->clusterKey($cluster),
                 retryAfterSeconds: (int) ceil($exception->delayMs / 1000),
             );
         }
     }
 
     /**
-     * Identity used to key a cluster's client-side budget. K8s API Priority &
-     * Fairness is per-apiserver, so keying per cluster is correct — two clusters
-     * never share a window. Prefers the manager name, else the request host.
+     * Identity used to key a cluster's client-side budget: the apiserver endpoint —
+     * host, non-default port and path prefix (a Rancher-style proxy serves many
+     * clusters from one host). Kubernetes API Priority & Fairness is per-apiserver,
+     * so two clusters never share a window, while every client of one apiserver
+     * (whatever its manager name or token) shares its budget.
      */
     protected function clusterKey(Cluster $cluster): string
     {
-        $managerName = $cluster->getManagerName();
-
-        if (is_string($managerName) && $managerName !== '') {
-            return $managerName;
-        }
-
         $url = $cluster->getUrl();
-        $host = parse_url($url, PHP_URL_HOST);
+        $parts = parse_url($url);
 
-        if (is_string($host) && $host !== '') {
-            return $host;
+        if (! is_array($parts) || ($parts['host'] ?? '') === '') {
+            return $url !== '' ? substr(hash('sha256', $url), 0, 12) : 'default';
         }
 
-        return $url !== '' ? substr(md5($url), 0, 12) : 'default';
+        $key = strtolower((string) $parts['host']);
+        $port = $parts['port'] ?? null;
+
+        if ($port !== null && $port !== (strtolower($parts['scheme'] ?? 'https') === 'http' ? 80 : 443)) {
+            $key .= ":{$port}";
+        }
+
+        return $key.rtrim($parts['path'] ?? '', '/');
     }
 }
