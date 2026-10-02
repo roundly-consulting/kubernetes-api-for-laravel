@@ -44,6 +44,10 @@ class ConfigMap extends Resource
         $data = (array) $this->getAttribute('data', []);
         unset($data[$name]);
 
-        return $this->setAttribute('data', $data);
+        // An empty map would encode as the JSON list `[]`, which the apiserver
+        // refuses for `data`; with no keys left the field goes altogether.
+        return $data === []
+            ? $this->removeAttribute('data')
+            : $this->setAttribute('data', $data);
     }
 }

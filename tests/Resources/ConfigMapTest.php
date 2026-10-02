@@ -54,3 +54,11 @@ it('keeps dotted data keys flat', function () {
         ->and($cm->removeData('nginx.conf')->toArray()['data'])->toBe(['app.env' => 'y'])
         ->and(ConfigMap::make()->setData(['a' => ['b' => 'nested']])->getData('a.b', 'default'))->toBe('default');
 });
+
+it('drops the data map once its last key is removed, instead of sending a json list', function () {
+    $cm = ConfigMap::make()->setName('c')->addData('nginx.conf', 'x')->removeData('nginx.conf');
+
+    expect($cm->toArray())->not->toHaveKey('data')
+        ->and($cm->toJson())->not->toContain('"data"')
+        ->and($cm->getData())->toBe([]);
+});

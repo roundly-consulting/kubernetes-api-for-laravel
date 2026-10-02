@@ -109,3 +109,10 @@ it('keeps dotted data keys flat', function () {
         ->and($secret->getData('.dockerconfigjson'))->toBe('{}')
         ->and(array_keys(Secret::make()->asTlsCertificate('C', 'K')->removeData('tls.crt')->toArray()['data']))->toBe(['tls.key']);
 });
+
+it('drops the data map once its last key is removed, instead of sending a json list', function () {
+    $secret = Secret::make()->setName('s')->addData('tls.crt', 'PEM')->removeData('tls.crt');
+
+    expect($secret->toArray())->not->toHaveKey('data')
+        ->and($secret->getData())->toBe([]);
+});
