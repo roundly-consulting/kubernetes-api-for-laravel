@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Resources;
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSpec;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasStatus;
@@ -69,9 +70,13 @@ class CronJob extends Resource
         return (int) $this->getSpec('failedJobsHistoryLimit', 1);
     }
 
+    /**
+     * Use the job's `metadata` and `spec` as the job template. A JobTemplateSpec has
+     * no `apiVersion`/`kind`, and a strict apiserver refuses them, so they are left out.
+     */
     public function setJobTemplate(Job $job): static
     {
-        return $this->setSpec('jobTemplate', $job->toArray());
+        return $this->setSpec('jobTemplate', Arr::only($job->toArray(), ['metadata', 'spec']));
     }
 
     public function getJobTemplate(): Job

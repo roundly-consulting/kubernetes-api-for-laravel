@@ -168,3 +168,12 @@ it('serialises an empty replication controller selector as the empty object', fu
     expect($rc->toJson())->toContain('"selector":{}')
         ->and($rc->toJson())->not->toContain('"selector":[]');
 });
+
+it('keeps only the JobTemplateSpec fields in a cron job template', function () {
+    $cron = CronJob::make()->setJobTemplate(Job::make()->setLabels(['app' => 'cleanup'])->setSpec('backoffLimit', 2));
+
+    expect($cron->getSpec('jobTemplate'))->toBe([
+        'metadata' => ['labels' => ['app' => 'cleanup']],
+        'spec' => ['backoffLimit' => 2],
+    ]);
+});

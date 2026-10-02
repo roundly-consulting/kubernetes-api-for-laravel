@@ -12,18 +12,19 @@ it('uses required traits', function () {
     ]);
 });
 
-it('sets template from pod instance to spec', function () {
+it('sets the template from a pod, keeping only the PodTemplateSpec fields', function () {
     $instance = new class
     {
         use HasTemplate;
     };
 
-    $pod = $this->mock(Pod::class);
-    $pod->expects('toArray')->once()->andReturn(['ok' => 'yes']);
+    $instance->setTemplate(Pod::make()->setName('ignored-kind')->setLabels(['app' => 'web'])->setSpec('restartPolicy', 'Always'));
 
-    $instance->setTemplate($pod);
-
-    expect($instance->getSpec('template'))->toBe(['ok' => 'yes']);
+    // apiVersion/kind are not template fields: a strict apiserver refuses them.
+    expect($instance->getSpec('template'))->toBe([
+        'metadata' => ['name' => 'ignored-kind', 'labels' => ['app' => 'web']],
+        'spec' => ['restartPolicy' => 'Always'],
+    ]);
 });
 
 it('returns template from spec', function () {
