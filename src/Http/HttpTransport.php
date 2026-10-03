@@ -141,7 +141,7 @@ final class HttpTransport implements Transport
         }
 
         return Config::using(ClusterConfigurationException::class)
-            ->intBetween('kubernetes.client.stream_timeout', 0, 86_400, 0);
+            ->integer('kubernetes.client.stream_timeout', 0, min: 0, max: 86_400);
     }
 
     private function authenticate(PendingRequest $request, Cluster $cluster): void
