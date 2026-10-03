@@ -10,6 +10,7 @@ use RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException;
 use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 use RoundlyConsulting\PackageToolkit\Contracts\HasRetryAfter;
+use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
 
 function clusterResource(string $manager = 'Pest Tests', string $url = 'https://localhost'): Deployment
 {
@@ -97,6 +98,42 @@ it('bypasses the limiter entirely when disabled', function () {
 
     $fake->assertNothingDeferred();
 });
+
+it('bypasses the limiter for an env-style off switch', function (string $value) {
+    // KUBERNETES_RATELIMIT_ENABLED=off arrives as 'off'; an `=== false` check kept throttling on.
+    config()->set('kubernetes.rate_limits.enabled', $value);
+    config()->set('kubernetes.rate_limits.max_attempts', 1);
+    $fake = RateLimits::fake();
+    okListing();
+
+    clusterResource()->get();
+    clusterResource()->get();
+
+    $fake->assertNothingDeferred();
+})->with(['0', 'off', 'no']);
+
+it('honours Retry-After for an env-style on adaptive switch', function (string $value) {
+    // KUBERNETES_RATELIMIT_ADAPTIVE=1 arrives as '1'; an `=== true` check left adaptive off.
+    config()->set('kubernetes.rate_limits.adaptive', $value);
+    $fake = RateLimits::fake();
+    Http::fake(['*' => Http::response(['message' => 'too many requests'], 429, ['Retry-After' => '2'])]);
+
+    rescue(fn () => clusterResource()->get(), report: false);
+    rescue(fn () => clusterResource()->get(), report: false);
+
+    $fake->assertDeferred('k8s:app:localhost');
+})->with(['1', 'on', 'yes']);
+
+it('refuses an unreadable rate-limit switch (strict config)', function (string $key) {
+    config()->set($key, 'disabled');
+    RateLimits::fake();
+    okListing();
+
+    expect(fn () => clusterResource()->get())
+        ->toThrow(InvalidConfigurationException::class, "Configuration value [{$key}] must be a boolean");
+
+    Http::assertNothingSent();
+})->with(['kubernetes.rate_limits.enabled', 'kubernetes.rate_limits.adaptive']);
 
 it('reads the apiserver 429 Retry-After so the next request self-throttles', function () {
     $fake = RateLimits::fake();

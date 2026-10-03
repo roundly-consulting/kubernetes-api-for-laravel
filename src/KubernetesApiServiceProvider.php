@@ -7,6 +7,7 @@ namespace RoundlyConsulting\KubernetesApi;
 use RoundlyConsulting\KubernetesApi\Commands\PingCommand;
 use RoundlyConsulting\PackageToolkit\Package;
 use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 
 final class KubernetesApiServiceProvider extends PackageServiceProvider
 {
@@ -23,14 +24,14 @@ final class KubernetesApiServiceProvider extends PackageServiceProvider
                 $resources = config('kubernetes.resources', []);
                 /** @var array<string, mixed> $clusters */
                 $clusters = config('kubernetes.clusters', []);
-                $throttled = config('kubernetes.rate_limits.enabled', true) !== false;
+                $throttled = Config::boolean('kubernetes.rate_limits.enabled', true);
 
                 // Names and counts only — never a URL, token or certificate path.
                 return [
                     'Default cluster' => (string) config('kubernetes.default', 'default'),
                     'Configured clusters' => (string) count($clusters),
                     'Rate limiting' => $throttled ? 'ENABLED' : 'OFF',
-                    'Adaptive throttling' => $throttled && config('kubernetes.rate_limits.adaptive', true) !== false ? 'ON' : 'OFF',
+                    'Adaptive throttling' => $throttled && Config::boolean('kubernetes.rate_limits.adaptive', true) ? 'ON' : 'OFF',
                     'Registered resources' => (string) count($resources),
                     'Traefik group' => (string) config('kubernetes.traefik.group', 'traefik.io/v1alpha1'),
                 ];

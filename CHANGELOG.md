@@ -66,3 +66,6 @@ Initial public release.
 
 - `Kubernetes::url(...)->withToken(...)` mutated the facade's shared instance, so a token or URL
   set by one caller leaked into every later `Kubernetes::…()` call.
+- A typo in `KUBERNETES_VERIFY_SSL` turned TLS verification off, `KUBERNETES_RATELIMIT_ENABLED=off`
+  kept throttling on, and `KUBERNETES_RATELIMIT_ADAPTIVE=1` left adaptive off. All three switches
+  now take the usual env spellings and throw on anything else.

@@ -13,6 +13,7 @@ use RoundlyConsulting\HttpClientRateLimits\Limit;
 use RoundlyConsulting\HttpClientRateLimits\RateLimit;
 use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 
 trait InteractsWithRateLimits
 {
@@ -30,7 +31,9 @@ trait InteractsWithRateLimits
         /** @var array<string, mixed> $config */
         $config = config('kubernetes.rate_limits', []);
 
-        if (($config['enabled'] ?? true) === false) {
+        // Through the strict reader: an identity check kept throttling on for an env
+        // `0`/`off`/`no` and switched `adaptive` off for `1`/`on`/`yes` or a typo.
+        if (! Config::boolean('kubernetes.rate_limits.enabled', true)) {
             return null;
         }
 
@@ -42,7 +45,7 @@ trait InteractsWithRateLimits
             timespan: $timespan,
         ))->by("k8s:{$owner}:{$this->clusterKey($cluster)}");
 
-        if (($config['adaptive'] ?? true) === true) {
+        if (Config::boolean('kubernetes.rate_limits.adaptive', true)) {
             $rateLimit->adaptive();
         }
 

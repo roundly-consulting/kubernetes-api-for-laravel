@@ -176,6 +176,11 @@ return [
 | `traefik.group` | `string` | `traefik.io/v1alpha1` | The API group/version the bundled Traefik resources target. Set it to `traefik.containo.us/v1alpha1` for Traefik installations older than v3. |
 | `resources` | `array<string, class-string>` | the core, workload, RBAC, policy + Traefik resources above | Maps an accessor name (e.g. `deployments`) to the resource class that backs it (`$cluster->deployments()`). Point a name at your own subclass to swap it, or add your own CRDs here to register them globally. |
 
+The `bool` switches (`clusters.<name>.verify`, `rate_limits.enabled`, `rate_limits.adaptive`)
+accept `true`/`false`, `1`/`0`, `on`/`off` and `yes`/`no`. Any other value throws naming the key
+(a `ClusterConfigurationException` for `verify`, an `InvalidConfigurationException` for the rate
+limits), so a typo in `KUBERNETES_VERIFY_SSL` can never switch TLS verification off.
+
 The built-in accessors cover config maps, secrets, pods, deployments, replica sets, stateful
 sets, daemon sets, replication controllers, jobs, cron jobs, services, endpoints, ingresses,
 namespaces, nodes, events, persistent volumes and claims, storage classes, RBAC

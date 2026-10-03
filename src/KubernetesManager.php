@@ -21,6 +21,7 @@ use RoundlyConsulting\KubernetesApi\Resources\Resource;
 use RoundlyConsulting\KubernetesApi\Support\InClusterConfigLoader;
 use RoundlyConsulting\KubernetesApi\Support\KubeConfigLoader;
 use RoundlyConsulting\KubernetesApi\Support\ResourceRegistry;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 
 /**
  * The root of the `Kubernetes` facade: owns the named clusters (from
@@ -282,7 +283,7 @@ class KubernetesManager
                 clientCertificatePath: $string($definition['certificate'] ?? null),
                 clientKeyPath: $string($definition['private_key'] ?? null),
                 certificateAuthorityPath: $string($definition['ca_certificate'] ?? null),
-                verify: filter_var($definition['verify'] ?? true, FILTER_VALIDATE_BOOL),
+                verify: self::verifies($name, $definition['verify'] ?? null),
             ),
             'kubeconfig' => $this->loadKubeConfig(
                 $string($definition['kubeconfig'] ?? null),
@@ -296,6 +297,18 @@ class KubernetesManager
             ->applyConfig($connection)
             ->withManagerName($string($definition['manager'] ?? null))
             ->withDefaultNamespace($string($definition['namespace'] ?? null) ?? 'default');
+    }
+
+    /**
+     * The cluster's `verify` switch, read strictly. `filter_var()` read a typo'd
+     * `KUBERNETES_VERIFY_SSL` as false and turned TLS verification off without a
+     * word; anything but a boolean spelling now throws, naming the cluster's key.
+     */
+    private static function verifies(string $cluster, mixed $value): bool
+    {
+        $key = "kubernetes.clusters.{$cluster}.verify";
+
+        return Config::for([$key => $value], ClusterConfigurationException::class)->boolean($key, true);
     }
 
     /** @return array<array-key, mixed> */

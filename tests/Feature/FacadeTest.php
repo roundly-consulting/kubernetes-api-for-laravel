@@ -56,6 +56,29 @@ it('resolves the default cluster from config', function (): void {
         ->and(Kubernetes::cluster())->toBe($cluster);
 });
 
+it('reads a configured cluster verify switch the way an env file writes it', function (mixed $value, bool $verifies): void {
+    config()->set('kubernetes.clusters.default', ['url' => 'https://k8s.example', 'verify' => $value]);
+
+    expect(Kubernetes::cluster()->shouldVerify())->toBe($verifies);
+})->with([
+    'unset' => [null, true],
+    'off' => ['off', false],
+    '0' => ['0', false],
+    'false' => [false, false],
+    'yes' => ['yes', true],
+    '1' => ['1', true],
+]);
+
+it('refuses an unreadable verify switch instead of turning TLS verification off (strict config)', function (): void {
+    // filter_var() read KUBERNETES_VERIFY_SSL=ture as false: certificate checks silently off.
+    config()->set('kubernetes.clusters.default', ['url' => 'https://k8s.example', 'verify' => 'ture']);
+
+    expect(fn () => Kubernetes::cluster())->toThrow(
+        ClusterConfigurationException::class,
+        'Configuration value [kubernetes.clusters.default.verify] must be a boolean',
+    );
+});
+
 it('picks the default cluster by name from config', function (): void {
     config()->set('kubernetes.default', 'prod');
     config()->set('kubernetes.clusters.prod', ['url' => 'https://prod.example']);
