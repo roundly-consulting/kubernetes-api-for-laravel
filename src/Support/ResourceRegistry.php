@@ -22,17 +22,62 @@ use RoundlyConsulting\KubernetesApi\Resources\Resource;
  */
 final class ResourceRegistry
 {
-    /** @return class-string<resource>|null */
+    /**
+     * The resource class registered under `$name`, or null when none is. A
+     * registered class that is not a {@see Resource} throws rather than failing
+     * obscurely once instantiated.
+     *
+     * @return class-string<resource>|null
+     *
+     * @throws InvalidResourceException
+     */
     public static function classFor(string $name): ?string
     {
-        return self::all()[$name] ?? null;
+        $class = self::configured()[$name] ?? null;
+
+        if ($class === null) {
+            return null;
+        }
+
+        if (! is_string($class) || ! is_a($class, Resource::class, true)) {
+            throw InvalidResourceException::notAResource(is_string($class) ? $class : get_debug_type($class));
+        }
+
+        return $class;
     }
 
-    /** @return array<string, class-string<resource>> */
+    /**
+     * @return array<string, class-string<resource>>
+     *
+     * @throws InvalidResourceException
+     */
     public static function all(): array
     {
         /** @var array<string, class-string<resource>> $resources */
-        $resources = (array) config('kubernetes.resources', []);
+        $resources = self::configured();
+
+        return $resources;
+    }
+
+    /**
+     * The raw `kubernetes.resources` map (absent = none); anything but an array
+     * throws instead of being cast into a list no accessor can reach.
+     *
+     * @return array<array-key, mixed>
+     *
+     * @throws InvalidResourceException
+     */
+    private static function configured(): array
+    {
+        $resources = config('kubernetes.resources');
+
+        if ($resources === null) {
+            return [];
+        }
+
+        if (! is_array($resources)) {
+            throw InvalidResourceException::invalidRegistry($resources);
+        }
 
         return $resources;
     }

@@ -23,6 +23,9 @@ return [
      * field manager, sent as `fieldManager` on every write (a server-side apply
      * without one uses `kubernetes-api-for-laravel`) and as the user agent. Clusters
      * registered with `Kubernetes::registerCluster()` override entries of the same name.
+     * Leave a setting unset (null) for its default: a present one must be a non-empty
+     * string, so a blank env (`KUBERNETES_TOKEN=`) or a non-string value throws a
+     * ClusterConfigurationException naming the key, as does an unknown `source`.
      */
     'clusters' => [
         'default' => [
@@ -47,7 +50,9 @@ return [
      * sit silent for minutes; `exec()` ignores it. Streams use `stream_timeout`
      * instead: the seconds of silence after which the stream ends cleanly (0 = wait
      * indefinitely, like kubectl; the apiserver still closes a watch after its own
-     * timeout).
+     * timeout). Both are read strictly: `timeout` must be a number of seconds, 0 or
+     * more (0 = none), and `stream_timeout` an integer from 0 to 86400; anything else
+     * (`five`, `5s`, a blank env) throws a ClusterConfigurationException.
      */
     'client' => [
         'options' => [
@@ -65,7 +70,11 @@ return [
      * instead. With `adaptive` on, a 429 `Retry-After` from the apiserver
      * self-tunes the limiter. Set `enabled => false` for the raw, unthrottled
      * client. For a budget shared across workers, point hcrl's `store` at
-     * Cache/Redis/Database via HTTP_CLIENT_RATE_LIMITS_STORE.
+     * Cache/Redis/Database via HTTP_CLIENT_RATE_LIMITS_STORE. Every key is read
+     * strictly: `max_attempts` is an integer of at least 1, `max_wait` / `jitter`
+     * integers of at least 0 (or unset), `timespan` exactly one of the four windows
+     * and `owner` a non-empty string. Anything else throws an
+     * InvalidConfigurationException naming the key; nothing falls back silently.
      */
     'rate_limits' => [
         'enabled' => env('KUBERNETES_RATELIMIT_ENABLED', true),
@@ -81,7 +90,8 @@ return [
      * Traefik ships its CRDs under the `traefik.io` API group since v3
      * (formerly `traefik.containo.us`). Override this to point the bundled
      * Traefik resources at whichever group your cluster exposes; set it to
-     * `traefik.containo.us/v1alpha1` for older Traefik installations.
+     * `traefik.containo.us/v1alpha1` for older Traefik installations. A blank or
+     * non-string value throws instead of being ignored.
      */
     'traefik' => [
         'group' => 'traefik.io/v1alpha1',

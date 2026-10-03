@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\KubernetesApi\Resources;
 
 use RoundlyConsulting\KubernetesApi\Resources\Types\TraefikRoute;
+use RoundlyConsulting\KubernetesApi\Support\TraefikGroup;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSpec;
 
 class TraefikIngressRoute extends Resource
@@ -22,11 +23,7 @@ class TraefikIngressRoute extends Resource
     {
         parent::__construct($attributes);
 
-        $group = config('kubernetes.traefik.group');
-
-        if (is_string($group) && $group !== '') {
-            $this->version = $group;
-        }
+        $this->version = TraefikGroup::resolve($this->version);
     }
 
     /** @param array<int, string> $entrypoints */

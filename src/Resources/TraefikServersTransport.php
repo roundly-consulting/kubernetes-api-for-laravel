@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Resources;
 
+use RoundlyConsulting\KubernetesApi\Support\TraefikGroup;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSpec;
 
 class TraefikServersTransport extends Resource
@@ -28,11 +29,7 @@ class TraefikServersTransport extends Resource
     {
         parent::__construct($attributes);
 
-        $group = config('kubernetes.traefik.group');
-
-        if (is_string($group) && $group !== '') {
-            $this->version = $group;
-        }
+        $this->version = TraefikGroup::resolve($this->version);
     }
 
     public function setServerName(string $serverName): static

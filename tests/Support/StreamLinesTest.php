@@ -49,7 +49,6 @@ it('reads the stream timeout from config, env strings included', function (mixed
     expect(HttpTransport::streamTimeout())->toBe($expected);
 })->with([
     'unset' => [null, 0],
-    'empty env' => ['', 0],
     'zero' => [0, 0],
     'int' => [300, 300],
     'env string' => ['45', 45],
@@ -60,3 +59,12 @@ it('refuses a malformed stream timeout', function (mixed $value): void {
 
     HttpTransport::streamTimeout();
 })->with(['soon', -1, 86_401])->throws(ClusterConfigurationException::class, 'kubernetes.client.stream_timeout');
+
+it('refuses an empty env stream timeout instead of waiting forever (strict config)', function (): void {
+    config()->set('kubernetes.client.stream_timeout', '');
+
+    expect(fn () => HttpTransport::streamTimeout())->toThrow(
+        ClusterConfigurationException::class,
+        "Configuration value [kubernetes.client.stream_timeout] must be an integer, [''] given.",
+    );
+});

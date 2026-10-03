@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Resources;
 
+use RoundlyConsulting\KubernetesApi\Support\TraefikGroup;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSpec;
 
 class TraefikMiddleware extends Resource
@@ -27,11 +28,7 @@ class TraefikMiddleware extends Resource
     {
         parent::__construct($attributes);
 
-        $group = config('kubernetes.traefik.group');
-
-        if (is_string($group) && $group !== '') {
-            $this->version = $group;
-        }
+        $this->version = TraefikGroup::resolve($this->version);
     }
 
     public function redirectToScheme(string $scheme = 'https', bool $permanent = true): static

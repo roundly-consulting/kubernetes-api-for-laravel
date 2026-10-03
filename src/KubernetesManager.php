@@ -240,11 +240,15 @@ class KubernetesManager
         return $this->cluster()->resource($class);
     }
 
+    /**
+     * `kubernetes.default`, or `default` when unset. A blank or non-string value
+     * throws instead of quietly talking to the cluster named `default`.
+     */
     protected function defaultClusterName(): string
     {
         $name = config('kubernetes.default');
 
-        return is_string($name) && $name !== '' ? $name : 'default';
+        return $name === null ? 'default' : self::requiredString('kubernetes.default', $name);
     }
 
     private function resolveCluster(string $name): Cluster
@@ -265,7 +269,14 @@ class KubernetesManager
             throw ClusterNotFoundException::named($name);
         }
 
-        return $this->clusterFromConfig($name, (array) $configured[$name]);
+        $definition = $configured[$name];
+
+        if (! is_array($definition)) {
+            throw ClusterConfigurationException::invalidSetting("kubernetes.clusters.{$name}", 'an array', $definition);
+        }
+
+        /** @var array<string, mixed> $definition */
+        return $this->clusterFromConfig($name, $definition);
     }
 
     /**
@@ -273,30 +284,49 @@ class KubernetesManager
      */
     private function clusterFromConfig(string $name, array $definition): Cluster
     {
-        $source = is_string($definition['source'] ?? null) ? $definition['source'] : 'url';
-        $string = static fn (mixed $value): ?string => is_string($value) && $value !== '' ? $value : null;
+        $source = $definition['source'] ?? 'url';
+
+        // An absent (null) setting takes its default; a present one must be a non-empty
+        // string. A blank env (`KUBERNETES_TOKEN=`) or a wrong-typed value throws, naming
+        // the key, instead of being quietly dropped.
+        $string = static fn (string $leaf, mixed $value): ?string => $value === null
+            ? null
+            : self::requiredString("kubernetes.clusters.{$name}.{$leaf}", $value);
 
         $connection = match ($source) {
             'url' => new KubeConfig(
-                server: $string($definition['url'] ?? null) ?? '',
-                token: $string($definition['token'] ?? null),
-                clientCertificatePath: $string($definition['certificate'] ?? null),
-                clientKeyPath: $string($definition['private_key'] ?? null),
-                certificateAuthorityPath: $string($definition['ca_certificate'] ?? null),
+                server: $string('url', $definition['url'] ?? null) ?? '',
+                token: $string('token', $definition['token'] ?? null),
+                clientCertificatePath: $string('certificate', $definition['certificate'] ?? null),
+                clientKeyPath: $string('private_key', $definition['private_key'] ?? null),
+                certificateAuthorityPath: $string('ca_certificate', $definition['ca_certificate'] ?? null),
                 verify: self::verifies($name, $definition['verify'] ?? null),
             ),
             'kubeconfig' => $this->loadKubeConfig(
-                $string($definition['kubeconfig'] ?? null),
-                $string($definition['context'] ?? null),
+                $string('kubeconfig', $definition['kubeconfig'] ?? null),
+                $string('context', $definition['context'] ?? null),
             ),
             'in-cluster' => $this->loadInClusterConfig(),
-            default => throw ClusterConfigurationException::unknownSource($name, $source),
+            default => throw ClusterConfigurationException::unknownSource($name, match (true) {
+                is_string($source) => $source,
+                is_scalar($source) => var_export($source, true),
+                default => get_debug_type($source),
+            }),
         };
 
         return $this->newCluster($name)
             ->applyConfig($connection)
-            ->withManagerName($string($definition['manager'] ?? null))
-            ->withDefaultNamespace($string($definition['namespace'] ?? null) ?? 'default');
+            ->withManagerName($string('manager', $definition['manager'] ?? null))
+            ->withDefaultNamespace($string('namespace', $definition['namespace'] ?? null) ?? 'default');
+    }
+
+    /**
+     * A present string setting: a non-empty string, or a ClusterConfigurationException
+     * naming the key.
+     */
+    private static function requiredString(string $key, mixed $value): string
+    {
+        return Config::for([$key => $value], ClusterConfigurationException::class)->requireString($key);
     }
 
     /**
@@ -311,9 +341,19 @@ class KubernetesManager
         return Config::for([$key => $value], ClusterConfigurationException::class)->boolean($key, true);
     }
 
-    /** @return array<array-key, mixed> */
+    /**
+     * The `kubernetes.clusters` map (absent = none); anything but an array throws.
+     *
+     * @return array<array-key, mixed>
+     */
     private function configuredClusters(): array
     {
-        return (array) config('kubernetes.clusters', []);
+        $clusters = config('kubernetes.clusters');
+
+        if ($clusters !== null && ! is_array($clusters)) {
+            throw ClusterConfigurationException::invalidSetting('kubernetes.clusters', 'an array', $clusters);
+        }
+
+        return $clusters ?? [];
     }
 }

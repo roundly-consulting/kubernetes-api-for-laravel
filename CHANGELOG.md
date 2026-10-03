@@ -71,3 +71,11 @@ Initial public release.
   now take the usual env spellings and throw on anything else.
 - A kubeconfig's `insecure-skip-tls-verify` was cast with `(bool)`, so a quoted `"false"` skipped
   TLS verification. It is read as a boolean now and anything else throws `KubeConfigException`.
+- Junk config fell back silently: `(int)` turned `KUBERNETES_RATELIMIT=five` into a broken budget,
+  a junk `max_wait` / `jitter` was dropped, a `timespan` typo became a minute, a blank
+  `KUBERNETES_STREAM_TIMEOUT` meant no timeout, a non-numeric `client.options.timeout` was dropped
+  from streams (and an env-string timeout was refused by Guzzle), and blank or non-string cluster
+  settings, `default`, `traefik.group` or a non-array `clusters` / `resources` map quietly used
+  defaults. Every key is read strictly now and throws naming it; an unset key keeps its default.
+- A `resources` entry that is not a `Resource` subclass failed with an undefined-method error;
+  it throws `InvalidResourceException`.

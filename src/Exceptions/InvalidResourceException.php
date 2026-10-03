@@ -19,6 +19,16 @@ class InvalidResourceException extends InvalidArgumentException
         return new self(sprintf('%s is not a %s.', $class, Resource::class));
     }
 
+    /**
+     * `kubernetes.resources` is not a map of accessor names to resource classes.
+     */
+    public static function invalidRegistry(mixed $value): self
+    {
+        $given = is_scalar($value) ? var_export($value, true) : get_debug_type($value);
+
+        return new self("Configuration value [kubernetes.resources] must be an array of resource classes, [{$given}] given.");
+    }
+
     public static function unusableName(string $name): self
     {
         return new self("'{$name}' cannot be used as a resource name: it is not a valid method name or a Cluster method already answers it.");

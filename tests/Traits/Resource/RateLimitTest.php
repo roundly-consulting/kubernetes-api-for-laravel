@@ -254,3 +254,82 @@ it('keys a cluster without a parsable host by its url', function () {
 
     $fake->assertAllowed('k8s:app:localhost');
 });
+
+it('reads env-string rate limits through the strict reader (strict config)', function () {
+    config()->set('kubernetes.rate_limits.max_attempts', '1');
+    config()->set('kubernetes.rate_limits.max_wait', '0');
+    config()->set('kubernetes.rate_limits.jitter', ' 0 ');
+    config()->set('kubernetes.rate_limits.timespan', 'hour');
+    config()->set('kubernetes.rate_limits.owner', 'workers');
+    $fake = RateLimits::fake();
+    okListing();
+
+    clusterResource()->get();
+    $fake->assertAllowed('k8s:workers:localhost');
+
+    try {
+        clusterResource()->get();
+    } catch (RateLimitExceededException $e) {
+        // An hour window: the hint is far beyond the minute window a typo used to fall back to.
+        expect($e->retryAfterSeconds())->toBeGreaterThan(60);
+
+        return;
+    }
+
+    $this->fail('Expected a RateLimitExceededException.');
+});
+
+it('refuses a junk rate-limit number instead of guessing one (strict config)', function (string $key, mixed $value, string $expected) {
+    config()->set("kubernetes.rate_limits.{$key}", $value);
+    RateLimits::fake();
+    okListing();
+
+    expect(fn () => clusterResource()->get())->toThrow(
+        InvalidConfigurationException::class,
+        "Configuration value [kubernetes.rate_limits.{$key}] must be {$expected}",
+    );
+})->with([
+    'max_attempts five' => ['max_attempts', 'five', 'an integer'],
+    'max_attempts 5.5' => ['max_attempts', '5.5', 'an integer'],
+    'max_attempts zero' => ['max_attempts', '0', 'at least 1'],
+    'max_wait soon' => ['max_wait', 'soon', 'an integer'],
+    'max_wait empty env' => ['max_wait', '', 'an integer'],
+    'max_wait negative' => ['max_wait', '-1', 'at least 0'],
+    'jitter 50ms' => ['jitter', '50ms', 'an integer'],
+    'jitter negative' => ['jitter', -5, 'at least 0'],
+]);
+
+it('refuses a typo in the rate-limit window instead of using a minute (strict config)', function (mixed $value) {
+    config()->set('kubernetes.rate_limits.timespan', $value);
+    RateLimits::fake();
+    okListing();
+
+    expect(fn () => clusterResource()->get())->toThrow(
+        InvalidConfigurationException::class,
+        'Configuration value [kubernetes.rate_limits.timespan] must be one of [second, minute, hour, day]',
+    );
+})->with(['minutes', 'Minute', 60]);
+
+it('refuses a non-string or blank rate-limit owner (strict config)', function (mixed $value) {
+    config()->set('kubernetes.rate_limits.owner', $value);
+    RateLimits::fake();
+    okListing();
+
+    expect(fn () => clusterResource()->get())->toThrow(
+        InvalidConfigurationException::class,
+        'Configuration value [kubernetes.rate_limits.owner] must be a non-empty string',
+    );
+})->with(['empty' => [''], 'array' => [['app']], 'int' => [7]]);
+
+it('uses the documented rate-limit defaults when the keys are absent (strict config)', function () {
+    foreach (['owner', 'max_attempts', 'timespan', 'max_wait', 'jitter'] as $key) {
+        config()->set("kubernetes.rate_limits.{$key}", null);
+    }
+
+    $fake = RateLimits::fake();
+    okListing();
+
+    clusterResource()->get();
+
+    $fake->assertAllowed('k8s:app:localhost');
+});

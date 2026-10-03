@@ -22,22 +22,22 @@ it('ships exactly the config keys it reads', function (): void {
         // both scrape as config reads. The first genuinely did: it failed the FORWARD
         // direction as a key the file "does not ship", which is true and meaningless.
         //
-        // Nothing here needs the prefix anyway — this package has no model seam and no
-        // injected-Repository reads, so every real read is a literal `config()` token the
-        // scraper already sees.
+        // The prefixes that ARE safe are `kubernetes.rate_limits.` and `kubernetes.client.`:
+        // no Kubernetes API literal lives under either. Both sections are read by full key
+        // through package-toolkit's strict readers, which the scraper does not always see:
+        // it does not know `Config::enum()` / `Config::requireString()` as reads (so
+        // `rate_limits.timespan` scraped as unread), nor a read chained off
+        // `Config::using(…)->integer()` (`client.stream_timeout`), nor a key held in a
+        // variable for its error message (`client.options.timeout`). None is dead config:
+        // each junk value throws, pinned in RateLimitTest, StreamLinesTest and
+        // ExecutesClusterOperationsTest.
+        'extraReadPrefixes' => ['kubernetes.rate_limits.', 'kubernetes.client.'],
 
-        // `rate_limiter()` takes the whole `rate_limits` section and reads it by offset
-        // rather than through seven `config()` calls. Those offsets ARE the reads, so
-        // mapping the variable is what makes them visible — and it is strictly better
-        // than `allowUnread`, which would assert a falsehood: these keys are read, and
-        // each one steers a real limiter decision.
-        //
-        // A cluster entry is read the same way: `KubernetesManager::clusterFromConfig()`
+        // A cluster entry is read as a section: `KubernetesManager::clusterFromConfig()`
         // takes one `clusters.<name>` array and reads its offsets. The shipped entry is
         // `default`, so the offsets map onto its leaves — every cluster a host adds has
         // the same keys.
         'sectionVariables' => [
-            'InteractsWithRateLimits.php' => ['$config' => 'kubernetes.rate_limits'],
             'KubernetesManager.php' => ['$definition' => 'kubernetes.clusters.default'],
         ],
 

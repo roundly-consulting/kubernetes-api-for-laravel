@@ -164,15 +164,15 @@ return [
 | `clusters.<name>.kubeconfig` / `context` | `string\|null` | `null` | For the `kubeconfig` source: the file (null = `KUBECONFIG` or `~/.kube/config`) and context (null = `current-context`). |
 | `clusters.<name>.namespace` | `string` | `default` (`KUBERNETES_NAMESPACE`) | The default namespace for namespaced resources on this cluster. |
 | `clusters.<name>.manager` | `string\|null` | `null` (`KUBERNETES_MANAGER`) | Your app's field manager, sent as `fieldManager` on every write and as the user agent. A server-side apply without one uses `kubernetes-api-for-laravel`. It does not key the rate-limit budget (that is per apiserver). |
-| `client.options` | `array<string, mixed>` | `['timeout' => 5]` | Laravel HTTP client options merged into every request the package sends (timeout, proxy, etc.). The `timeout` bounds ordinary requests. For watches and `streamLogs()` it bounds only connecting and the response headers; `exec()` ignores it. |
-| `client.stream_timeout` | `int` (seconds) | `0` (`KUBERNETES_STREAM_TIMEOUT`) | Idle timeout for streams: after this many seconds of silence a watch or log follow ends cleanly, and an unfinished `exec()` reports no exit code. `0` waits indefinitely, like kubectl. The apiserver still closes a watch after its own timeout. |
+| `client.options` | `array<string, mixed>` | `['timeout' => 5]` | Laravel HTTP client options merged into every request the package sends (timeout, proxy, etc.). The `timeout` (seconds, int, float or a numeric string; `0` = none) bounds ordinary requests. For watches and `streamLogs()` it bounds only connecting and the response headers; `exec()` ignores it. |
+| `client.stream_timeout` | `int` (seconds, 0–86400) | `0` (`KUBERNETES_STREAM_TIMEOUT`) | Idle timeout for streams: after this many seconds of silence a watch or log follow ends cleanly, and an unfinished `exec()` reports no exit code. `0` waits indefinitely, like kubectl. The apiserver still closes a watch after its own timeout. |
 | `rate_limits.enabled` | `bool` | `true` (`KUBERNETES_RATELIMIT_ENABLED`) | Toggle client-side rate limiting. `false` sends raw, unthrottled requests. |
 | `rate_limits.owner` | `string` | `app` (`KUBERNETES_RATELIMIT_OWNER`) | Namespaces the budget key, so several apps/workers can share (or isolate) a cluster budget. |
-| `rate_limits.max_attempts` | `int` | `400` (`KUBERNETES_RATELIMIT`) | Requests allowed per cluster per window before pacing kicks in. |
+| `rate_limits.max_attempts` | `int` (≥ 1) | `400` (`KUBERNETES_RATELIMIT`) | Requests allowed per cluster per window before pacing kicks in. |
 | `rate_limits.timespan` | `string` | `minute` (`KUBERNETES_RATELIMIT_TIMESPAN`) | Window length: `second`, `minute`, `hour`, or `day`. |
 | `rate_limits.adaptive` | `bool` | `true` (`KUBERNETES_RATELIMIT_ADAPTIVE`) | Honour the apiserver's `Retry-After` header on a `429`, self-tuning the limiter. |
-| `rate_limits.max_wait` | `int\|null` (ms) | `null` (`KUBERNETES_RATELIMIT_MAX_WAIT`) | `null` paces (waits). Set a ceiling in ms to fail fast with a `RateLimitExceededException` instead. |
-| `rate_limits.jitter` | `int\|null` (ms) | `null` (`KUBERNETES_RATELIMIT_JITTER`) | Random spread added to each defer, smoothing thundering-herd bursts. |
+| `rate_limits.max_wait` | `int\|null` (ms, ≥ 0) | `null` (`KUBERNETES_RATELIMIT_MAX_WAIT`) | `null` paces (waits). Set a ceiling in ms to fail fast with a `RateLimitExceededException` instead. |
+| `rate_limits.jitter` | `int\|null` (ms, ≥ 0) | `null` (`KUBERNETES_RATELIMIT_JITTER`) | Random spread added to each defer, smoothing thundering-herd bursts. |
 | `traefik.group` | `string` | `traefik.io/v1alpha1` | The API group/version the bundled Traefik resources target. Set it to `traefik.containo.us/v1alpha1` for Traefik installations older than v3. |
 | `resources` | `array<string, class-string>` | the core, workload, RBAC, policy + Traefik resources above | Maps an accessor name (e.g. `deployments`) to the resource class that backs it (`$cluster->deployments()`). Point a name at your own subclass to swap it, or add your own CRDs here to register them globally. |
 
@@ -180,6 +180,26 @@ The `bool` switches (`clusters.<name>.verify`, `rate_limits.enabled`, `rate_limi
 accept `true`/`false`, `1`/`0`, `on`/`off` and `yes`/`no`. Any other value throws naming the key
 (a `ClusterConfigurationException` for `verify`, an `InvalidConfigurationException` for the rate
 limits), so a typo in `KUBERNETES_VERIFY_SSL` can never switch TLS verification off.
+
+Every other key is read just as strictly. Nothing falls back to a default except an unset
+(`null`) key:
+
+- **Numbers** take an int or an integer string (`'400'`): `rate_limits.max_attempts` (≥ 1),
+  `rate_limits.max_wait` / `jitter` (≥ 0) and `client.stream_timeout` (0–86400).
+  `client.options.timeout` also takes a float or decimal string (`'2.5'`), 0 or more. `'five'`,
+  `'5.5'` for an integer, `'5s'`, a blank env or a negative number throws.
+- **`rate_limits.timespan`** must be exactly `second`, `minute`, `hour` or `day`. A typo such as
+  `minutes` throws instead of becoming a minute.
+- **Strings** (`default`, the `clusters.<name>` URL, credential paths, `kubeconfig`, `context`,
+  `namespace` and `manager`, plus `rate_limits.owner` and `traefik.group`) must be non-empty
+  strings. A blank env such as `KUBERNETES_TOKEN=` throws, so leave unused keys unset. An unknown
+  or non-string `source` throws as well.
+- **Maps.** `clusters`, a `clusters.<name>` entry, `client.options` and `resources` must be
+  arrays, and every `resources` entry must name a `Resource` subclass.
+
+Cluster and client settings throw `ClusterConfigurationException`, `resources` throws
+`InvalidResourceException`, and the rate limits and `traefik.group` throw the toolkit's
+`InvalidConfigurationException`. Each message names the key.
 
 The built-in accessors cover config maps, secrets, pods, deployments, replica sets, stateful
 sets, daemon sets, replication controllers, jobs, cron jobs, services, endpoints, ingresses,

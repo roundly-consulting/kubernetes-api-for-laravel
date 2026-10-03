@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use RoundlyConsulting\KubernetesApi\Cluster;
+use RoundlyConsulting\KubernetesApi\Exceptions\ClusterConfigurationException;
 use RoundlyConsulting\KubernetesApi\Exceptions\KubernetesException;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 use RoundlyConsulting\KubernetesApi\Resources\ResourcesCollection;
@@ -68,6 +69,37 @@ it('uses custom http client options defined in config when making requests', fun
                ];
     });
 });
+
+it('refuses junk http client options instead of dropping them (strict config)', function (string $key, mixed $value, string $expected) {
+    Http::fake(['*' => Http::response(['items' => []])]);
+    config()->set("kubernetes.client.{$key}", $value);
+
+    expect(fn () => $this->resource->get())->toThrow(
+        ClusterConfigurationException::class,
+        "Configuration value [kubernetes.client.{$key}] must be {$expected}",
+    );
+})->with([
+    'options string' => ['options', 'timeout=5', 'an array of HTTP client options'],
+    'timeout word' => ['options.timeout', 'five', 'a number of seconds (0 or more)'],
+    'timeout suffix' => ['options.timeout', '5s', 'a number of seconds (0 or more)'],
+    'timeout empty env' => ['options.timeout', '', 'a number of seconds (0 or more)'],
+    'timeout negative' => ['options.timeout', -1, 'a number of seconds (0 or more)'],
+    'timeout bool' => ['options.timeout', true, 'a number of seconds (0 or more)'],
+]);
+
+it('accepts a numeric http client timeout, env strings included (strict config)', function (mixed $value) {
+    Http::fake(['*' => Http::response(['items' => []])]);
+    config()->set('kubernetes.client.options.timeout', $value);
+
+    expect($this->resource->get())->toBeInstanceOf(ResourcesCollection::class);
+})->with(['int' => [5], 'float' => [2.5], 'zero' => [0], 'env int' => ['30'], 'env float' => [' 2.5 ']]);
+
+it('sends requests without client options when none are configured (strict config)', function (string $key) {
+    Http::fake(['*' => Http::response(['items' => []])]);
+    config()->set("kubernetes.client.{$key}", null);
+
+    expect($this->resource->get())->toBeInstanceOf(ResourcesCollection::class);
+})->with(['options', 'options.timeout']);
 
 it('makes get request to get all resources of type', function () {
     Http::fake([

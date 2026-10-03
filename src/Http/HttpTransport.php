@@ -53,7 +53,7 @@ final class HttpTransport implements Transport
 
         $this->authenticate($request, $cluster);
 
-        $request->withOptions((array) config('kubernetes.client.options', []));
+        $request->withOptions(self::clientOptions());
 
         if ($stream) {
             $request->withOptions($this->streamOptions());
@@ -93,13 +93,68 @@ final class HttpTransport implements Transport
     private function streamOptions(): array
     {
         $options = ['stream' => true, 'timeout' => 0];
-        $timeout = config('kubernetes.client.options.timeout');
+        $timeout = self::requestTimeout();
 
-        if (is_numeric($timeout) && $timeout > 0) {
+        if ($timeout !== null && $timeout > 0) {
             $options['read_timeout'] = (float) $timeout;
         }
 
         return $options;
+    }
+
+    /**
+     * The `client.options` merged into every request: an array (absent = none)
+     * whose `timeout` is normalised by {@see self::requestTimeout()}. A non-array
+     * value throws instead of being cast into a list Guzzle silently ignores.
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function clientOptions(): array
+    {
+        $options = config('kubernetes.client.options');
+
+        if ($options === null) {
+            return [];
+        }
+
+        if (! is_array($options)) {
+            throw ClusterConfigurationException::invalidSetting('kubernetes.client.options', 'an array of HTTP client options', $options);
+        }
+
+        $timeout = self::requestTimeout();
+
+        if ($timeout !== null) {
+            $options['timeout'] = $timeout;
+        }
+
+        return $options;
+    }
+
+    /**
+     * `client.options.timeout` in seconds, or null when unset: an int, a float or
+     * a plain decimal string (`'30'`, `'2.5'` — env values are strings), 0 or more
+     * (Guzzle's 0 waits indefinitely). Anything else — `'five'`, `'5s'`, `''`, a
+     * negative number, a bool — throws, rather than being dropped from the stream
+     * read timeout or handed to Guzzle to reject mid-request.
+     */
+    private static function requestTimeout(): int|float|null
+    {
+        $key = 'kubernetes.client.options.timeout';
+        $value = config($key);
+
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_string($value) && preg_match('/^\s*\d+(\.\d+)?\s*$/', $value) === 1) {
+            $value = str_contains($value, '.') ? (float) $value : (int) $value;
+        }
+
+        if ((is_int($value) || (is_float($value) && is_finite($value))) && $value >= 0) {
+            return $value;
+        }
+
+        throw ClusterConfigurationException::invalidSetting($key, 'a number of seconds (0 or more)', $value);
     }
 
     /**
@@ -136,10 +191,6 @@ final class HttpTransport implements Transport
      */
     public static function streamTimeout(): int
     {
-        if (in_array(config('kubernetes.client.stream_timeout'), [null, ''], true)) {
-            return 0;
-        }
-
         return Config::using(ClusterConfigurationException::class)
             ->integer('kubernetes.client.stream_timeout', 0, min: 0, max: 86_400);
     }

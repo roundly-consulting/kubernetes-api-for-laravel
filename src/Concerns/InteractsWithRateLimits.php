@@ -25,36 +25,39 @@ trait InteractsWithRateLimits
      * than hard-failing; set a `max_wait` to fail fast instead. With `adaptive`
      * on (the default) the limiter also honours the apiserver's own
      * `Retry-After` header on a 429.
+     *
+     * Every key goes through package-toolkit's strict readers: an absent (null)
+     * key takes its default, and a present but invalid one throws
+     * InvalidConfigurationException naming it. `(int) 'five'` used to be 0, a
+     * junk `max_wait` / `jitter` was dropped and a `timespan` typo became a minute.
      */
     protected function rateLimiter(Cluster $cluster): ?RateLimit
     {
-        /** @var array<string, mixed> $config */
-        $config = config('kubernetes.rate_limits', []);
-
-        // Through the strict reader: an identity check kept throttling on for an env
-        // `0`/`off`/`no` and switched `adaptive` off for `1`/`on`/`yes` or a typo.
+        // An identity check kept throttling on for an env `0`/`off`/`no` and switched
+        // `adaptive` off for `1`/`on`/`yes` or a typo.
         if (! Config::boolean('kubernetes.rate_limits.enabled', true)) {
             return null;
         }
 
-        $timespan = Timespan::tryFrom((string) ($config['timespan'] ?? 'minute')) ?? Timespan::Minute;
-        $owner = (string) ($config['owner'] ?? 'app');
+        $owner = config('kubernetes.rate_limits.owner') === null
+            ? 'app'
+            : Config::requireString('kubernetes.rate_limits.owner');
 
         $rateLimit = RateLimits::make(new Limit(
-            maxAttempts: (int) ($config['max_attempts'] ?? 400),
-            timespan: $timespan,
+            maxAttempts: Config::integer('kubernetes.rate_limits.max_attempts', 400, min: 1),
+            timespan: Config::enum('kubernetes.rate_limits.timespan', Timespan::class, Timespan::Minute),
         ))->by("k8s:{$owner}:{$this->clusterKey($cluster)}");
 
         if (Config::boolean('kubernetes.rate_limits.adaptive', true)) {
             $rateLimit->adaptive();
         }
 
-        if (isset($config['max_wait']) && is_numeric($config['max_wait'])) {
-            $rateLimit->maxWait((int) $config['max_wait']);
+        if (config('kubernetes.rate_limits.max_wait') !== null) {
+            $rateLimit->maxWait(Config::integer('kubernetes.rate_limits.max_wait', 0, min: 0));
         }
 
-        if (isset($config['jitter']) && is_numeric($config['jitter'])) {
-            $rateLimit->jitter((int) $config['jitter']);
+        if (config('kubernetes.rate_limits.jitter') !== null) {
+            $rateLimit->jitter(Config::integer('kubernetes.rate_limits.jitter', 0, min: 0));
         }
 
         return $rateLimit;

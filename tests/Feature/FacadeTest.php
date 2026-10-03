@@ -87,6 +87,88 @@ it('picks the default cluster by name from config', function (): void {
         ->and(Kubernetes::cluster()->getUrl())->toBe('https://prod.example');
 });
 
+it('refuses a non-string or blank cluster setting instead of dropping it (strict config)', function (array $definition, string $key): void {
+    config()->set('kubernetes.clusters.default', $definition);
+
+    expect(fn () => Kubernetes::cluster())->toThrow(
+        ClusterConfigurationException::class,
+        "Configuration value [kubernetes.clusters.default.{$key}] must be a non-empty string",
+    );
+})->with([
+    'url empty env' => [['url' => ''], 'url'],
+    'url port only' => [['url' => 6443], 'url'],
+    'token empty env' => [['url' => 'https://k8s.example', 'token' => ''], 'token'],
+    'token list' => [['url' => 'https://k8s.example', 'token' => ['t']], 'token'],
+    'certificate bool' => [['url' => 'https://k8s.example', 'certificate' => true], 'certificate'],
+    'private key blank' => [['url' => 'https://k8s.example', 'private_key' => ' '], 'private_key'],
+    'ca certificate empty env' => [['url' => 'https://k8s.example', 'ca_certificate' => ''], 'ca_certificate'],
+    'namespace empty env' => [['url' => 'https://k8s.example', 'namespace' => ''], 'namespace'],
+    'manager int' => [['url' => 'https://k8s.example', 'manager' => 1], 'manager'],
+    'kubeconfig empty env' => [['source' => 'kubeconfig', 'kubeconfig' => ''], 'kubeconfig'],
+    'context int' => [['source' => 'kubeconfig', 'context' => 3], 'context'],
+]);
+
+it('refuses a non-string cluster source instead of assuming url (strict config)', function (): void {
+    config()->set('kubernetes.clusters.default', ['source' => true, 'url' => 'https://k8s.example']);
+
+    expect(fn () => Kubernetes::cluster())->toThrow(ClusterConfigurationException::class, "unknown source 'true'");
+});
+
+it('refuses a cluster definition that is not an array (strict config)', function (): void {
+    config()->set('kubernetes.clusters.prod', 'https://prod.example');
+
+    expect(fn () => Kubernetes::cluster('prod'))->toThrow(
+        ClusterConfigurationException::class,
+        'Configuration value [kubernetes.clusters.prod] must be an array, [https://prod.example] given.',
+    );
+});
+
+it('refuses a clusters map that is not an array (strict config)', function (): void {
+    config()->set('kubernetes.clusters', 'default');
+
+    expect(fn () => Kubernetes::cluster())->toThrow(
+        ClusterConfigurationException::class,
+        'Configuration value [kubernetes.clusters] must be an array, [default] given.',
+    );
+});
+
+it('refuses a blank or non-string default cluster name (strict config)', function (mixed $value): void {
+    config()->set('kubernetes.default', $value);
+
+    expect(fn () => Kubernetes::cluster())->toThrow(
+        ClusterConfigurationException::class,
+        'Configuration value [kubernetes.default] must be a non-empty string',
+    );
+})->with(['empty env' => [''], 'int' => [1], 'list' => [['prod']]]);
+
+it('uses the default cluster name when kubernetes.default is unset (strict config)', function (): void {
+    config()->set('kubernetes.default', null);
+    config()->set('kubernetes.clusters.default', ['url' => 'https://k8s.example']);
+
+    expect(Kubernetes::cluster()->name())->toBe('default');
+});
+
+it('refuses a configured resource class that is not a resource (strict config)', function (): void {
+    config()->set('kubernetes.resources.pods', stdClass::class);
+
+    expect(fn () => Kubernetes::pods())->toThrow(InvalidResourceException::class, 'stdClass is not a '.Resource::class);
+});
+
+it('uses the bundled resource class when no resources map is configured (strict config)', function (): void {
+    config()->set('kubernetes.resources', null);
+
+    expect(Kubernetes::pods())->toBeInstanceOf(Pod::class);
+});
+
+it('refuses a resources map that is not an array (strict config)', function (): void {
+    config()->set('kubernetes.resources', Pod::class);
+
+    expect(fn () => Kubernetes::pods())->toThrow(
+        InvalidResourceException::class,
+        'Configuration value [kubernetes.resources] must be an array of resource classes',
+    );
+});
+
 it('builds a configured cluster from a kubeconfig file', function (): void {
     $path = tempnam(sys_get_temp_dir(), 'kc-');
     file_put_contents($path, <<<'YAML'
