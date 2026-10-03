@@ -352,3 +352,61 @@ it('rewrites a temp PEM file that was removed and removes them all on demand', f
         @unlink($path);
     }
 });
+
+function kubeConfigWithInsecureSkip(string $value): string
+{
+    return writeKubeConfig(<<<YAML
+        apiVersion: v1
+        current-context: local
+        clusters:
+          - name: local
+            cluster:
+              server: https://localhost:6443
+              insecure-skip-tls-verify: {$value}
+        users:
+          - name: local
+            user:
+              token: t
+        contexts:
+          - name: local
+            context:
+              cluster: local
+              user: local
+        YAML);
+}
+
+it('reads insecure-skip-tls-verify as a boolean, never by truthiness (strict config)', function (string $value, bool $verifies) {
+    // `(bool) "false"` is true: a quoted YAML "false" used to switch TLS verification OFF.
+    $path = kubeConfigWithInsecureSkip($value);
+
+    expect((new KubeConfigLoader)->load($path)->verify)->toBe($verifies);
+
+    @unlink($path);
+})->with([
+    'quoted false' => ['"false"', true],
+    'quoted no' => ["'no'", true],
+    'quoted zero' => ['"0"', true],
+    'bare false' => ['false', true],
+    'null' => ['null', true],
+    'quoted true' => ['"true"', false],
+    'bare true' => ['true', false],
+    'yes' => ['yes', false],
+]);
+
+it('refuses an unreadable insecure-skip-tls-verify instead of guessing (strict config)', function (string $value) {
+    $path = kubeConfigWithInsecureSkip($value);
+
+    try {
+        expect(fn () => (new KubeConfigLoader)->load($path))->toThrow(
+            KubeConfigException::class,
+            "Cluster 'local' has an invalid insecure-skip-tls-verify value",
+        );
+    } finally {
+        @unlink($path);
+    }
+})->with([
+    'word' => ['"disabled"'],
+    'typo' => ['ture'],
+    'number' => ['2'],
+    'list' => ['[true]'],
+]);

@@ -312,7 +312,10 @@ Point the client at a cluster in one line instead of hand-wiring the URL and cre
 `fromKubeConfig()` parses the kubeconfig, resolves the named context's cluster and user, and
 materialises any inline certificate data to private temp files (one per distinct PEM, removed
 when the PHP process exits). Relative certificate paths (`certificate-authority: certs/ca.crt`)
-resolve against the kubeconfig's own directory, as kubectl does.
+resolve against the kubeconfig's own directory, as kubectl does. A cluster's
+`insecure-skip-tls-verify` must be a boolean (`true`/`false`, also `yes`/`no`, `on`/`off`,
+`1`/`0`, quoted or not); anything else throws `KubeConfigException` instead of guessing, so a
+quoted `"false"` keeps TLS verification on.
 
 `inCluster()` reads the service-account token and CA mounted into a pod, and the
 `KUBERNETES_SERVICE_HOST`/`KUBERNETES_SERVICE_PORT` env (IPv6 hosts included). TLS verification

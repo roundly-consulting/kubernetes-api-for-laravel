@@ -69,3 +69,5 @@ Initial public release.
 - A typo in `KUBERNETES_VERIFY_SSL` turned TLS verification off, `KUBERNETES_RATELIMIT_ENABLED=off`
   kept throttling on, and `KUBERNETES_RATELIMIT_ADAPTIVE=1` left adaptive off. All three switches
   now take the usual env spellings and throw on anything else.
+- A kubeconfig's `insecure-skip-tls-verify` was cast with `(bool)`, so a quoted `"false"` skipped
+  TLS verification. It is read as a boolean now and anything else throws `KubeConfigException`.

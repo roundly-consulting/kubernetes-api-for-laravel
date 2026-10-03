@@ -60,7 +60,7 @@ final class KubeConfigLoader
             throw new KubeConfigException("Cluster '{$clusterName}' has no server URL.");
         }
 
-        $insecure = (bool) ($cluster['insecure-skip-tls-verify'] ?? false);
+        $insecure = $this->insecureSkipTlsVerify($cluster, $clusterName);
         $directory = $this->directoryOf($path);
 
         return new KubeConfig(
@@ -71,6 +71,38 @@ final class KubeConfigLoader
             certificateAuthorityPath: $this->resolvePem($cluster, 'certificate-authority', 'certificate-authority-data', 'ca', $directory),
             verify: ! $insecure,
         );
+    }
+
+    /**
+     * The cluster's `insecure-skip-tls-verify`, read as a boolean. A `(bool)` cast
+     * read a quoted YAML `"false"` as TRUE and skipped TLS verification; only a
+     * boolean or a boolean word (`true`/`false`, `yes`/`no`, `on`/`off`, `1`/`0`)
+     * is accepted now, and anything else throws rather than guessing which way
+     * certificate checks should go. Absent (or null) keeps verification on.
+     *
+     * @param  array<string, mixed>  $cluster
+     */
+    private function insecureSkipTlsVerify(array $cluster, string $clusterName): bool
+    {
+        $value = $cluster['insecure-skip-tls-verify'] ?? null;
+
+        if ($value === null || is_bool($value)) {
+            return $value ?? false;
+        }
+
+        if (is_string($value) || is_int($value)) {
+            $parsed = filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+
+            if ($parsed !== null) {
+                return $parsed;
+            }
+        }
+
+        throw new KubeConfigException(sprintf(
+            "Cluster '%s' has an invalid insecure-skip-tls-verify value [%s]: use true or false.",
+            $clusterName,
+            is_scalar($value) ? (string) $value : get_debug_type($value),
+        ));
     }
 
     /**
