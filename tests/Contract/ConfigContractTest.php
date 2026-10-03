@@ -22,16 +22,13 @@ it('ships exactly the config keys it reads', function (): void {
         // both scrape as config reads. The first genuinely did: it failed the FORWARD
         // direction as a key the file "does not ship", which is true and meaningless.
         //
-        // The prefixes that ARE safe are `kubernetes.rate_limits.` and `kubernetes.client.`:
-        // no Kubernetes API literal lives under either. Both sections are read by full key
-        // through package-toolkit's strict readers, which the scraper does not always see:
-        // it does not know `Config::enum()` / `Config::requireString()` as reads (so
-        // `rate_limits.timespan` scraped as unread), nor a read chained off
-        // `Config::using(…)->integer()` (`client.stream_timeout`), nor a key held in a
-        // variable for its error message (`client.options.timeout`). None is dead config:
-        // each junk value throws, pinned in RateLimitTest, StreamLinesTest and
-        // ExecutesClusterOperationsTest.
-        'extraReadPrefixes' => ['kubernetes.rate_limits.', 'kubernetes.client.'],
+        // The one exact key named instead is `client.options.timeout`: HttpTransport holds
+        // it in a variable (`$key = 'kubernetes.client.options.timeout'`) so its error
+        // message can name it, and the scraper does not follow a key through a variable. It
+        // is not dead config — a junk value throws, pinned in ExecutesClusterOperationsTest.
+        // (The rate-limit and `client.stream_timeout` reads go through package-toolkit's
+        // strict readers, which the contract reads natively.)
+        'extraReadPrefixes' => ['kubernetes.client.options.timeout'],
 
         // A cluster entry is read as a section: `KubernetesManager::clusterFromConfig()`
         // takes one `clusters.<name>` array and reads its offsets. The shipped entry is
