@@ -293,7 +293,6 @@ it('refuses a junk rate-limit number instead of guessing one (strict config)', f
     'max_attempts 5.5' => ['max_attempts', '5.5', 'an integer'],
     'max_attempts zero' => ['max_attempts', '0', 'at least 1'],
     'max_wait soon' => ['max_wait', 'soon', 'an integer'],
-    'max_wait empty env' => ['max_wait', '', 'an integer'],
     'max_wait negative' => ['max_wait', '-1', 'at least 0'],
     'jitter 50ms' => ['jitter', '50ms', 'an integer'],
     'jitter negative' => ['jitter', -5, 'at least 0'],
@@ -310,7 +309,7 @@ it('refuses a typo in the rate-limit window instead of using a minute (strict co
     );
 })->with(['minutes', 'Minute', 60]);
 
-it('refuses a non-string or blank rate-limit owner (strict config)', function (mixed $value) {
+it('refuses a non-string rate-limit owner (strict config)', function (mixed $value) {
     config()->set('kubernetes.rate_limits.owner', $value);
     RateLimits::fake();
     okListing();
@@ -319,11 +318,12 @@ it('refuses a non-string or blank rate-limit owner (strict config)', function (m
         InvalidConfigurationException::class,
         'Configuration value [kubernetes.rate_limits.owner] must be a non-empty string',
     );
-})->with(['empty' => [''], 'array' => [['app']], 'int' => [7]]);
+})->with(['array' => [['app']], 'int' => [7]]);
 
-it('uses the documented rate-limit defaults when the keys are absent (strict config)', function () {
-    foreach (['owner', 'max_attempts', 'timespan', 'max_wait', 'jitter'] as $key) {
-        config()->set("kubernetes.rate_limits.{$key}", null);
+it('uses the documented rate-limit defaults when the keys are not set (strict config)', function (?string $value) {
+    // Blank means not set: null and a host's `KEY=` (empty or whitespace) both take the default.
+    foreach (['enabled', 'owner', 'max_attempts', 'timespan', 'adaptive', 'max_wait', 'jitter'] as $key) {
+        config()->set("kubernetes.rate_limits.{$key}", $value);
     }
 
     $fake = RateLimits::fake();
@@ -332,4 +332,18 @@ it('uses the documented rate-limit defaults when the keys are absent (strict con
     clusterResource()->get();
 
     $fake->assertAllowed('k8s:app:localhost');
-});
+})->with(['null' => [null], 'empty env' => [''], 'whitespace' => ['  ']]);
+
+it('paces rather than failing fast when max_wait is blank (strict config)', function (string $blank) {
+    // A blank `max_wait` is not set — pace — never a 0 ms ceiling that fails every wait.
+    config()->set('kubernetes.rate_limits.max_attempts', 1);
+    config()->set('kubernetes.rate_limits.max_wait', $blank);
+    config()->set('kubernetes.rate_limits.jitter', $blank);
+    $fake = RateLimits::fake();
+    okListing();
+
+    clusterResource()->get();
+    clusterResource()->get();
+
+    $fake->assertDeferred('k8s:app:localhost');
+})->with(['empty env' => [''], 'whitespace' => ['  ']]);

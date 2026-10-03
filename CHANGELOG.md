@@ -72,10 +72,15 @@ Initial public release.
 - A kubeconfig's `insecure-skip-tls-verify` was cast with `(bool)`, so a quoted `"false"` skipped
   TLS verification. It is read as a boolean now and anything else throws `KubeConfigException`.
 - Junk config fell back silently: `(int)` turned `KUBERNETES_RATELIMIT=five` into a broken budget,
-  a junk `max_wait` / `jitter` was dropped, a `timespan` typo became a minute, a blank
-  `KUBERNETES_STREAM_TIMEOUT` meant no timeout, a non-numeric `client.options.timeout` was dropped
-  from streams (and an env-string timeout was refused by Guzzle), and blank or non-string cluster
-  settings, `default`, `traefik.group` or a non-array `clusters` / `resources` map quietly used
-  defaults. Every key is read strictly now and throws naming it; an unset key keeps its default.
+  a junk `max_wait` / `jitter` was dropped, a `timespan` typo became a minute, a non-numeric
+  `client.options.timeout` was dropped from streams (and an env-string timeout was refused by
+  Guzzle), and non-string cluster settings, `default`, `traefik.group` or a non-array `clusters` /
+  `resources` map quietly used defaults. Every key is read strictly now and throws naming it; a
+  key that is not set keeps its default.
+- Blank means not set: a blank value (a host's `KEY=`, empty or whitespace only) reads exactly
+  like an absent key and takes its default. `KUBERNETES_TOKEN=` sends no token,
+  `KUBERNETES_SOURCE=` is `url`, `KUBERNETES_NAMESPACE=` is `default`, `KUBERNETES_CLUSTER=` is the
+  `default` cluster, a blank `KUBERNETES_STREAM_TIMEOUT` is the default 0, and a blank
+  `max_wait` / `jitter` is unset (a blank `max_wait` used to become a 0 ms fail-fast ceiling).
 - A `resources` entry that is not a `Resource` subclass failed with an undefined-method error;
   it throws `InvalidResourceException`.

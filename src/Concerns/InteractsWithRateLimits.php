@@ -13,6 +13,7 @@ use RoundlyConsulting\HttpClientRateLimits\Limit;
 use RoundlyConsulting\HttpClientRateLimits\RateLimit;
 use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\Exceptions\RateLimitExceededException;
+use RoundlyConsulting\KubernetesApi\Support\ConfigValue;
 use RoundlyConsulting\PackageToolkit\Support\Config;
 
 trait InteractsWithRateLimits
@@ -26,8 +27,9 @@ trait InteractsWithRateLimits
      * on (the default) the limiter also honours the apiserver's own
      * `Retry-After` header on a 429.
      *
-     * Every key goes through package-toolkit's strict readers: an absent (null)
-     * key takes its default, and a present but invalid one throws
+     * Every key goes through package-toolkit's strict readers: a key that is not
+     * set — absent, null or blank (a host's `KEY=`) — takes its default, and a set
+     * but invalid one throws
      * InvalidConfigurationException naming it. `(int) 'five'` used to be 0, a
      * junk `max_wait` / `jitter` was dropped and a `timespan` typo became a minute.
      */
@@ -39,9 +41,9 @@ trait InteractsWithRateLimits
             return null;
         }
 
-        $owner = config('kubernetes.rate_limits.owner') === null
-            ? 'app'
-            : Config::requireString('kubernetes.rate_limits.owner');
+        $owner = ConfigValue::isSet(config('kubernetes.rate_limits.owner'))
+            ? Config::requireString('kubernetes.rate_limits.owner')
+            : 'app';
 
         $rateLimit = RateLimits::make(new Limit(
             maxAttempts: Config::integer('kubernetes.rate_limits.max_attempts', 400, min: 1),
@@ -52,11 +54,11 @@ trait InteractsWithRateLimits
             $rateLimit->adaptive();
         }
 
-        if (config('kubernetes.rate_limits.max_wait') !== null) {
+        if (ConfigValue::isSet(config('kubernetes.rate_limits.max_wait'))) {
             $rateLimit->maxWait(Config::integer('kubernetes.rate_limits.max_wait', 0, min: 0));
         }
 
-        if (config('kubernetes.rate_limits.jitter') !== null) {
+        if (ConfigValue::isSet(config('kubernetes.rate_limits.jitter'))) {
             $rateLimit->jitter(Config::integer('kubernetes.rate_limits.jitter', 0, min: 0));
         }
 

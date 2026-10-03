@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Http;
 use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\Exceptions\ClusterConfigurationException;
 use RoundlyConsulting\KubernetesApi\Exceptions\KubernetesException;
+use RoundlyConsulting\KubernetesApi\Http\HttpTransport;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 use RoundlyConsulting\KubernetesApi\Resources\ResourcesCollection;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\ExecutesClusterOperations;
@@ -82,7 +83,6 @@ it('refuses junk http client options instead of dropping them (strict config)', 
     'options string' => ['options', 'timeout=5', 'an array of HTTP client options'],
     'timeout word' => ['options.timeout', 'five', 'a number of seconds (0 or more)'],
     'timeout suffix' => ['options.timeout', '5s', 'a number of seconds (0 or more)'],
-    'timeout empty env' => ['options.timeout', '', 'a number of seconds (0 or more)'],
     'timeout negative' => ['options.timeout', -1, 'a number of seconds (0 or more)'],
     'timeout bool' => ['options.timeout', true, 'a number of seconds (0 or more)'],
 ]);
@@ -94,12 +94,21 @@ it('accepts a numeric http client timeout, env strings included (strict config)'
     expect($this->resource->get())->toBeInstanceOf(ResourcesCollection::class);
 })->with(['int' => [5], 'float' => [2.5], 'zero' => [0], 'env int' => ['30'], 'env float' => [' 2.5 ']]);
 
-it('sends requests without client options when none are configured (strict config)', function (string $key) {
+it('sends requests without client options when none are configured (strict config)', function (string $key, ?string $value) {
+    // Blank means not set: a blank options map or timeout reads exactly like null.
     Http::fake(['*' => Http::response(['items' => []])]);
-    config()->set("kubernetes.client.{$key}", null);
+    config()->set("kubernetes.client.{$key}", $value);
 
     expect($this->resource->get())->toBeInstanceOf(ResourcesCollection::class);
-})->with(['options', 'options.timeout']);
+})->with(['options', 'options.timeout'])->with(['null' => [null], 'empty env' => [''], 'whitespace' => ['  ']]);
+
+it('hands a blank request timeout to the HTTP client exactly as a null one (strict config)', function (string $blank) {
+    config()->set('kubernetes.client.options', ['timeout' => $blank, 'verify' => false]);
+
+    $options = (fn (): array => self::clientOptions())->call(new HttpTransport);
+
+    expect($options)->toBe(['timeout' => null, 'verify' => false]);
+})->with(['empty env' => [''], 'whitespace' => ['  ']]);
 
 it('makes get request to get all resources of type', function () {
     Http::fake([

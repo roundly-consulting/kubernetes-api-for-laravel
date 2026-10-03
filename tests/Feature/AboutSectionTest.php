@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\Artisan;
+
 /**
  * The secret-safe `about` capture (A).
  *
@@ -56,3 +58,15 @@ it('renders the section without disclosing a cluster credential or endpoint', fu
         ],
     );
 });
+
+it('reports the defaults for a blank default cluster and traefik group', function (?string $blank): void {
+    // Blank means not set: `KUBERNETES_CLUSTER=` is the cluster named `default`, never ''.
+    config()->set('kubernetes.default', $blank);
+    config()->set('kubernetes.traefik.group', $blank);
+
+    Artisan::call('about', ['--only' => 'kubernetes']);
+
+    expect(Artisan::output())
+        ->toMatch('/Default cluster\W+default\b/')
+        ->toMatch('#Traefik group\W+traefik\.io/v1alpha1\b#');
+})->with(['null' => [null], 'empty env' => [''], 'whitespace' => ['  ']]);

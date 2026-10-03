@@ -18,6 +18,7 @@ use RoundlyConsulting\KubernetesApi\Exceptions\NamespaceScopeException;
 use RoundlyConsulting\KubernetesApi\Http\HttpTransport;
 use RoundlyConsulting\KubernetesApi\Http\Transport;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
+use RoundlyConsulting\KubernetesApi\Support\ConfigValue;
 use RoundlyConsulting\KubernetesApi\Support\InClusterConfigLoader;
 use RoundlyConsulting\KubernetesApi\Support\KubeConfigLoader;
 use RoundlyConsulting\KubernetesApi\Support\ResourceRegistry;
@@ -241,14 +242,15 @@ class KubernetesManager
     }
 
     /**
-     * `kubernetes.default`, or `default` when unset. A blank or non-string value
-     * throws instead of quietly talking to the cluster named `default`.
+     * `kubernetes.default`, or `default` when not set — absent, null or blank (a
+     * host's `KUBERNETES_CLUSTER=`). A non-string value throws instead of quietly
+     * talking to the cluster named `default`.
      */
     protected function defaultClusterName(): string
     {
         $name = config('kubernetes.default');
 
-        return $name === null ? 'default' : self::requiredString('kubernetes.default', $name);
+        return ConfigValue::isSet($name) ? self::requiredString('kubernetes.default', $name) : 'default';
     }
 
     private function resolveCluster(string $name): Cluster
@@ -284,14 +286,14 @@ class KubernetesManager
      */
     private function clusterFromConfig(string $name, array $definition): Cluster
     {
-        $source = $definition['source'] ?? 'url';
+        $source = ConfigValue::isSet($definition['source'] ?? null) ? $definition['source'] : 'url';
 
-        // An absent (null) setting takes its default; a present one must be a non-empty
-        // string. A blank env (`KUBERNETES_TOKEN=`) or a wrong-typed value throws, naming
-        // the key, instead of being quietly dropped.
-        $string = static fn (string $leaf, mixed $value): ?string => $value === null
-            ? null
-            : self::requiredString("kubernetes.clusters.{$name}.{$leaf}", $value);
+        // A setting that is not set — absent, null or blank (a host's `KUBERNETES_TOKEN=`)
+        // — takes its default; a set one must be a string. A wrong-typed value throws,
+        // naming the key, instead of being quietly dropped.
+        $string = static fn (string $leaf, mixed $value): ?string => ConfigValue::isSet($value)
+            ? self::requiredString("kubernetes.clusters.{$name}.{$leaf}", $value)
+            : null;
 
         $connection = match ($source) {
             'url' => new KubeConfig(

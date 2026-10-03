@@ -8,7 +8,8 @@ return [
     /*
      * The cluster `Kubernetes::pods()`, `Kubernetes::ping()` and every other
      * default-cluster shortcut talk to, and `kubernetes:ping` checks without an
-     * argument. Must name an entry below or a cluster registered in code.
+     * argument. Must name an entry below or a cluster registered in code; unset or
+     * blank (`KUBERNETES_CLUSTER=`) means `default`.
      */
     'default' => env('KUBERNETES_CLUSTER', 'default'),
 
@@ -23,9 +24,10 @@ return [
      * field manager, sent as `fieldManager` on every write (a server-side apply
      * without one uses `kubernetes-api-for-laravel`) and as the user agent. Clusters
      * registered with `Kubernetes::registerCluster()` override entries of the same name.
-     * Leave a setting unset (null) for its default: a present one must be a non-empty
-     * string, so a blank env (`KUBERNETES_TOKEN=`) or a non-string value throws a
-     * ClusterConfigurationException naming the key, as does an unknown `source`.
+     * A setting that is not set — unset, null or blank (`KUBERNETES_TOKEN=`) — takes its
+     * default (no token, `url`, `default` …); a set one must be a string, so a
+     * non-string value throws a ClusterConfigurationException naming the key, as does
+     * an unknown `source`.
      */
     'clusters' => [
         'default' => [
@@ -52,7 +54,8 @@ return [
      * indefinitely, like kubectl; the apiserver still closes a watch after its own
      * timeout). Both are read strictly: `timeout` must be a number of seconds, 0 or
      * more (0 = none), and `stream_timeout` an integer from 0 to 86400; anything else
-     * (`five`, `5s`, a blank env) throws a ClusterConfigurationException.
+     * (`five`, `5s`) throws a ClusterConfigurationException. A blank value is not set
+     * and takes the default.
      */
     'client' => [
         'options' => [
@@ -73,8 +76,9 @@ return [
      * Cache/Redis/Database via HTTP_CLIENT_RATE_LIMITS_STORE. Every key is read
      * strictly: `max_attempts` is an integer of at least 1, `max_wait` / `jitter`
      * integers of at least 0 (or unset), `timespan` exactly one of the four windows
-     * and `owner` a non-empty string. Anything else throws an
-     * InvalidConfigurationException naming the key; nothing falls back silently.
+     * and `owner` a string. Anything else throws an InvalidConfigurationException
+     * naming the key; nothing falls back silently. A blank value (`KEY=`) is not set
+     * and takes the default (a blank `max_wait` / `jitter` is unset).
      */
     'rate_limits' => [
         'enabled' => env('KUBERNETES_RATELIMIT_ENABLED', true),
@@ -90,8 +94,8 @@ return [
      * Traefik ships its CRDs under the `traefik.io` API group since v3
      * (formerly `traefik.containo.us`). Override this to point the bundled
      * Traefik resources at whichever group your cluster exposes; set it to
-     * `traefik.containo.us/v1alpha1` for older Traefik installations. A blank or
-     * non-string value throws instead of being ignored.
+     * `traefik.containo.us/v1alpha1` for older Traefik installations. A blank value is
+     * not set (the bundled group); a non-string value throws instead of being ignored.
      */
     'traefik' => [
         'group' => 'traefik.io/v1alpha1',

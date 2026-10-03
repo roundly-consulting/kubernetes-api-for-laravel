@@ -12,6 +12,7 @@ use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\Concerns\InteractsWithRateLimits;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\ExecResult;
 use RoundlyConsulting\KubernetesApi\Exceptions\ClusterConfigurationException;
+use RoundlyConsulting\KubernetesApi\Support\ConfigValue;
 use RoundlyConsulting\KubernetesApi\WebSocket\ExecConnection;
 use RoundlyConsulting\PackageToolkit\Support\Config;
 
@@ -113,7 +114,7 @@ final class HttpTransport implements Transport
     {
         $options = config('kubernetes.client.options');
 
-        if ($options === null) {
+        if (! ConfigValue::isSet($options)) {
             return [];
         }
 
@@ -121,28 +122,29 @@ final class HttpTransport implements Transport
             throw ClusterConfigurationException::invalidSetting('kubernetes.client.options', 'an array of HTTP client options', $options);
         }
 
-        $timeout = self::requestTimeout();
-
-        if ($timeout !== null) {
-            $options['timeout'] = $timeout;
+        // Normalised in place: a blank `timeout` is not set, so it reaches Guzzle exactly
+        // as a null one does.
+        if (array_key_exists('timeout', $options)) {
+            $options['timeout'] = self::requestTimeout();
         }
 
         return $options;
     }
 
     /**
-     * `client.options.timeout` in seconds, or null when unset: an int, a float or
-     * a plain decimal string (`'30'`, `'2.5'` — env values are strings), 0 or more
-     * (Guzzle's 0 waits indefinitely). Anything else — `'five'`, `'5s'`, `''`, a
-     * negative number, a bool — throws, rather than being dropped from the stream
-     * read timeout or handed to Guzzle to reject mid-request.
+     * `client.options.timeout` in seconds, or null when not set (absent, null or
+     * blank): an int, a float or a plain decimal string (`'30'`, `'2.5'` — env
+     * values are strings), 0 or more (Guzzle's 0 waits indefinitely). Anything
+     * else — `'five'`, `'5s'`, a negative number, a bool — throws, rather than
+     * being dropped from the stream read timeout or handed to Guzzle to reject
+     * mid-request.
      */
     private static function requestTimeout(): int|float|null
     {
         $key = 'kubernetes.client.options.timeout';
         $value = config($key);
 
-        if ($value === null) {
+        if (! ConfigValue::isSet($value)) {
             return null;
         }
 

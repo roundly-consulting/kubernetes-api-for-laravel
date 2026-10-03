@@ -87,7 +87,7 @@ it('picks the default cluster by name from config', function (): void {
         ->and(Kubernetes::cluster()->getUrl())->toBe('https://prod.example');
 });
 
-it('refuses a non-string or blank cluster setting instead of dropping it (strict config)', function (array $definition, string $key): void {
+it('refuses a non-string cluster setting instead of dropping it (strict config)', function (array $definition, string $key): void {
     config()->set('kubernetes.clusters.default', $definition);
 
     expect(fn () => Kubernetes::cluster())->toThrow(
@@ -95,18 +95,50 @@ it('refuses a non-string or blank cluster setting instead of dropping it (strict
         "Configuration value [kubernetes.clusters.default.{$key}] must be a non-empty string",
     );
 })->with([
-    'url empty env' => [['url' => ''], 'url'],
     'url port only' => [['url' => 6443], 'url'],
-    'token empty env' => [['url' => 'https://k8s.example', 'token' => ''], 'token'],
     'token list' => [['url' => 'https://k8s.example', 'token' => ['t']], 'token'],
     'certificate bool' => [['url' => 'https://k8s.example', 'certificate' => true], 'certificate'],
-    'private key blank' => [['url' => 'https://k8s.example', 'private_key' => ' '], 'private_key'],
-    'ca certificate empty env' => [['url' => 'https://k8s.example', 'ca_certificate' => ''], 'ca_certificate'],
-    'namespace empty env' => [['url' => 'https://k8s.example', 'namespace' => ''], 'namespace'],
     'manager int' => [['url' => 'https://k8s.example', 'manager' => 1], 'manager'],
-    'kubeconfig empty env' => [['source' => 'kubeconfig', 'kubeconfig' => ''], 'kubeconfig'],
     'context int' => [['source' => 'kubeconfig', 'context' => 3], 'context'],
 ]);
+
+it('reads a blank cluster setting as not set, exactly like an absent one (strict config)', function (string $blank): void {
+    // Blank means not set: a host's `KUBERNETES_TOKEN=` sends no token rather than throwing,
+    // `KUBERNETES_SOURCE=` is `url`, `KUBERNETES_NAMESPACE=` is `default`, and so on.
+    config()->set('kubernetes.clusters.default', [
+        'source' => $blank,
+        'url' => 'https://k8s.example',
+        'token' => $blank,
+        'certificate' => $blank,
+        'private_key' => $blank,
+        'ca_certificate' => $blank,
+        'verify' => $blank,
+        'kubeconfig' => $blank,
+        'context' => $blank,
+        'namespace' => $blank,
+        'manager' => $blank,
+    ]);
+
+    $cluster = Kubernetes::cluster();
+
+    expect($cluster->getUrl())->toBe('https://k8s.example')
+        ->and($cluster->hasToken())->toBeFalse()
+        ->and($cluster->hasPathToCertificate())->toBeFalse()
+        ->and($cluster->hasPathToPrivateKey())->toBeFalse()
+        ->and($cluster->hasPathToCaCertificate())->toBeFalse()
+        ->and($cluster->shouldVerify())->toBeTrue()
+        ->and($cluster->defaultNamespace())->toBe('default')
+        ->and($cluster->getManagerName())->toBeNull();
+})->with(['empty env' => [''], 'whitespace' => ['  ']]);
+
+it('refuses a request to a cluster whose blank url is not set (strict config)', function (): void {
+    config()->set('kubernetes.clusters.default', ['url' => '']);
+
+    expect(fn () => Kubernetes::pods()->get())->toThrow(
+        ClusterConfigurationException::class,
+        "No cluster URL configured for cluster 'default'.",
+    );
+});
 
 it('refuses a non-string cluster source instead of assuming url (strict config)', function (): void {
     config()->set('kubernetes.clusters.default', ['source' => true, 'url' => 'https://k8s.example']);
@@ -132,21 +164,21 @@ it('refuses a clusters map that is not an array (strict config)', function (): v
     );
 });
 
-it('refuses a blank or non-string default cluster name (strict config)', function (mixed $value): void {
+it('refuses a non-string default cluster name (strict config)', function (mixed $value): void {
     config()->set('kubernetes.default', $value);
 
     expect(fn () => Kubernetes::cluster())->toThrow(
         ClusterConfigurationException::class,
         'Configuration value [kubernetes.default] must be a non-empty string',
     );
-})->with(['empty env' => [''], 'int' => [1], 'list' => [['prod']]]);
+})->with(['int' => [1], 'list' => [['prod']]]);
 
-it('uses the default cluster name when kubernetes.default is unset (strict config)', function (): void {
-    config()->set('kubernetes.default', null);
+it('uses the default cluster name when kubernetes.default is not set (strict config)', function (?string $value): void {
+    config()->set('kubernetes.default', $value);
     config()->set('kubernetes.clusters.default', ['url' => 'https://k8s.example']);
 
     expect(Kubernetes::cluster()->name())->toBe('default');
-});
+})->with(['null' => [null], 'empty env' => [''], 'whitespace' => ['  ']]);
 
 it('refuses a configured resource class that is not a resource (strict config)', function (): void {
     config()->set('kubernetes.resources.pods', stdClass::class);

@@ -181,19 +181,20 @@ accept `true`/`false`, `1`/`0`, `on`/`off` and `yes`/`no`. Any other value throw
 (a `ClusterConfigurationException` for `verify`, an `InvalidConfigurationException` for the rate
 limits), so a typo in `KUBERNETES_VERIFY_SSL` can never switch TLS verification off.
 
-Every other key is read just as strictly. Nothing falls back to a default except an unset
-(`null`) key:
+Every other key is read just as strictly. Nothing falls back to a default except a key that is
+not set. **Blank means not set:** an absent key, `null` and a blank value (a host's `KEY=`, empty
+or whitespace only) all take the default — on the switches too, where a blank is never false:
 
 - **Numbers** take an int or an integer string (`'400'`): `rate_limits.max_attempts` (≥ 1),
   `rate_limits.max_wait` / `jitter` (≥ 0) and `client.stream_timeout` (0–86400).
   `client.options.timeout` also takes a float or decimal string (`'2.5'`), 0 or more. `'five'`,
-  `'5.5'` for an integer, `'5s'`, a blank env or a negative number throws.
+  `'5.5'` for an integer, `'5s'` or a negative number throws.
 - **`rate_limits.timespan`** must be exactly `second`, `minute`, `hour` or `day`. A typo such as
   `minutes` throws instead of becoming a minute.
 - **Strings** (`default`, the `clusters.<name>` URL, credential paths, `kubeconfig`, `context`,
-  `namespace` and `manager`, plus `rate_limits.owner` and `traefik.group`) must be non-empty
-  strings. A blank env such as `KUBERNETES_TOKEN=` throws, so leave unused keys unset. An unknown
-  or non-string `source` throws as well.
+  `namespace` and `manager`, plus `rate_limits.owner` and `traefik.group`) must be strings. A
+  blank env such as `KUBERNETES_TOKEN=` is not set: no token is sent, exactly as if the line were
+  missing. An unknown or non-string `source` throws; a blank one is `url`.
 - **Maps.** `clusters`, a `clusters.<name>` entry, `client.options` and `resources` must be
   arrays, and every `resources` entry must name a `Resource` subclass.
 

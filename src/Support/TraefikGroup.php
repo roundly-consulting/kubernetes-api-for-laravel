@@ -13,14 +13,14 @@ final class TraefikGroup
 {
     /**
      * `kubernetes.traefik.group`, or the resource's bundled `$default` when it is
-     * unset. A blank or non-string value throws InvalidConfigurationException
-     * instead of being ignored, so a broken override never silently targets the
-     * wrong API group.
+     * not set — absent, null or blank. A non-string value throws
+     * InvalidConfigurationException instead of being ignored, so a broken override
+     * never silently targets the wrong API group.
      */
     public static function resolve(string $default): string
     {
-        return config('kubernetes.traefik.group') === null
-            ? $default
-            : Config::requireString('kubernetes.traefik.group');
+        return ConfigValue::isSet(config('kubernetes.traefik.group'))
+            ? Config::requireString('kubernetes.traefik.group')
+            : $default;
     }
 }
