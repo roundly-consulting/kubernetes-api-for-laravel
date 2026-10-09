@@ -19,10 +19,17 @@ it('extends resource class', function () {
         HasStatus::class,
         HasStatusPhase::class,
         HasStorageClass::class,
-        HasSelectors::class,
         HasMountOptions::class,
         HasAccessModes::class,
     ]);
+});
+
+it('has no selector api, since a persistent volume has no spec.selector', function () {
+    // PersistentVolumeSpec has no `selector` (the claim does): the field was dropped.
+    expect(class_uses(PersistentVolume::class))->not->toContain(HasSelectors::class)
+        ->and(method_exists(PersistentVolume::class, 'setSelectors'))->toBeFalse()
+        ->and(method_exists(PersistentVolume::class, 'addSelector'))->toBeFalse()
+        ->and(method_exists(PersistentVolume::class, 'getSelectors'))->toBeFalse();
 });
 
 it('has correct kind', function () {

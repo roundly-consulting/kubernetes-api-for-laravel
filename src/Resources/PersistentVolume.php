@@ -6,7 +6,6 @@ namespace RoundlyConsulting\KubernetesApi\Resources;
 
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasAccessModes;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasMountOptions;
-use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSelectors;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSpec;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasStatus;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasStatusPhase;
@@ -16,7 +15,6 @@ class PersistentVolume extends Resource
 {
     use HasAccessModes;
     use HasMountOptions;
-    use HasSelectors;
     use HasSpec;
     use HasStatus;
     use HasStatusPhase;

@@ -18,6 +18,22 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   argument.
 - `KubeConfig::$namespace`: the kubeconfig context's namespace.
 
+### Changed
+
+- A kubeconfig context's `namespace` is now used: `Kubernetes::fromKubeConfig()` /
+  `connect()` take it as the cluster's default namespace, and so does a `kubeconfig`-source
+  cluster that sets no `namespace` of its own. Behaviour change: the shipped
+  `clusters.default.namespace` no longer defaults to `'default'` (it is
+  `env('KUBERNETES_NAMESPACE')`), so the order is the cluster's `namespace`, then the
+  context's, then `default`. A published config still carrying `'default'` keeps the old
+  behaviour.
+
+### Removed
+
+- `PersistentVolume::setSelectors()`, `addSelector()` and `getSelectors()`. A PersistentVolume
+  has no `spec.selector` (the claim has one), so they only wrote a field the apiserver drops
+  (or refuses under strict field validation).
+
 ### Fixed
 
 - `Volume::emptyDirectory()` without options now sends `emptyDir: {}`. It used to send the
@@ -84,13 +100,6 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - Without an explicit path the kubeconfig loader now merges every file in `KUBECONFIG`, like
   kubectl: missing files are skipped and the first file to set a value wins. Only the first
   path used to be read, and a missing first file failed the load.
-- A kubeconfig context's `namespace` is now used: `Kubernetes::fromKubeConfig()` /
-  `connect()` take it as the cluster's default namespace, and so does a `kubeconfig`-source
-  cluster that sets no `namespace` of its own. Behaviour change: the shipped
-  `clusters.default.namespace` no longer defaults to `'default'` (it is
-  `env('KUBERNETES_NAMESPACE')`), so the order is the cluster's `namespace`, then the
-  context's, then `default`. A published config still carrying `'default'` keeps the old
-  behaviour.
 
 ## 1.0.0 - 2026-10-03
 
