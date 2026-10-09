@@ -147,6 +147,43 @@ it('updates or creates', function (): void {
     $fake->assertUpdated(Deployment::class, 'web');
 });
 
+it('keeps the stored status on update and patch, as the apiserver does', function (): void {
+    // The main resource ignores status writes (only the status subresource changes
+    // it): a freshly built manifest must not wipe a seeded status.
+    Kubernetes::fake()->seed(Deployment::class, [[...web(), 'status' => ['readyReplicas' => 2]]]);
+
+    $updated = Kubernetes::deployments()->setName('web')->setReplicas(4)->updateOrCreate();
+
+    expect($updated->getAttribute('status'))->toBe(['readyReplicas' => 2])
+        ->and($updated->getReplicas())->toBe(4)
+        ->and(Kubernetes::deployments()->setName('web')->find()->getAttribute('status'))->toBe(['readyReplicas' => 2]);
+
+    $put = Kubernetes::deployments()->setName('web')->find()->setAttribute('status.readyReplicas', 99)->setReplicas(5)->update();
+
+    expect($put->getAttribute('status'))->toBe(['readyReplicas' => 2])
+        ->and($put->getReplicas())->toBe(5);
+
+    $patched = Kubernetes::deployments()->setName('web')->patch(KubernetesPatch::merge([
+        'spec' => ['replicas' => 6],
+        'status' => ['readyReplicas' => 42],
+    ]));
+
+    expect($patched->getAttribute('status'))->toBe(['readyReplicas' => 2])
+        ->and($patched->getReplicas())->toBe(6)
+        ->and(Kubernetes::deployments()->setName('web')->patch(KubernetesPatch::json([
+            ['op' => 'replace', 'path' => '/status/readyReplicas', 'value' => 7],
+        ]))->getAttribute('status'))->toBe(['readyReplicas' => 2]);
+});
+
+it('does not invent a status an object never had', function (): void {
+    Kubernetes::fake()->seed(ConfigMap::class, [['metadata' => ['name' => 'cfg'], 'data' => ['a' => 'b']]]);
+
+    $updated = Kubernetes::configMaps()->setName('cfg')->setAttribute('status', ['x' => 1])->setData(['a' => 'c'])->update();
+
+    expect($updated->getAttribute('status'))->toBeNull()
+        ->and($updated->getData())->toBe(['a' => 'c']);
+});
+
 it('filters by label and field selectors', function (): void {
     Kubernetes::fake()->seed('pods', [
         ['metadata' => ['name' => 'web-1', 'labels' => ['app' => 'web', 'tier' => 'frontend']], 'status' => ['phase' => 'Running']],

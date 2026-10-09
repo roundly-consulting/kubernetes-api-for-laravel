@@ -100,6 +100,9 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - Without an explicit path the kubeconfig loader now merges every file in `KUBECONFIG`, like
   kubectl: missing files are skipped and the first file to set a value wins. Only the first
   path used to be read, and a missing first file failed the load.
+- `Kubernetes::fake()`: `update()`, `updateOrCreate()` and `patch()` now keep the stored
+  `status`, as the apiserver does on the main resource. The fake used to replace it with
+  whatever was sent, so a freshly built manifest wiped a seeded status.
 
 ## 1.0.0 - 2026-10-03
 

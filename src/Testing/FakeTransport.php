@@ -25,8 +25,10 @@ use RoundlyConsulting\KubernetesApi\Http\Transport;
  *           selectors, `limit`/`continue`), and records every request.
  *
  * Approximations, by design: strategic-merge and server-side-apply patches are applied
- * as JSON merge patches (lists are replaced, not merged by key), and exec/logs answer
- * for any pod — seeded or not.
+ * as JSON merge patches (lists are replaced, not merged by key), `update()` and
+ * `patch()` keep the stored `status` for every kind (as the apiserver does for kinds
+ * with a status subresource), deletes are immediate, and exec/logs answer for any pod —
+ * seeded or not.
  */
 final class FakeTransport implements Transport
 {
@@ -321,7 +323,7 @@ final class FakeTransport implements Transport
         $body['metadata']['creationTimestamp'] = $current['metadata']['creationTimestamp'] ?? null;
 
         /** @var array<string, mixed> $body */
-        return $this->store($partition, $api, $body, $dryRun);
+        return $this->store($partition, $api, $this->keepStatus($body, $current), $dryRun);
     }
 
     /**
@@ -364,7 +366,27 @@ final class FakeTransport implements Transport
             return $this->status(422, 'Invalid', "the JSON patch for {$api->label()} \"{$api->name}\" could not be applied");
         }
 
-        return $this->store($partition, $api, $patched, $dryRun);
+        return $this->store($partition, $api, $this->keepStatus($patched, $current), $dryRun);
+    }
+
+    /**
+     * A write to the main resource leaves `status` as stored, the way the apiserver
+     * treats every kind with a status subresource: only the controller (through
+     * `/status`) changes it.
+     *
+     * @param  array<string, mixed>  $object
+     * @param  array<string, mixed>  $current
+     * @return array<string, mixed>
+     */
+    private function keepStatus(array $object, array $current): array
+    {
+        unset($object['status']);
+
+        if (array_key_exists('status', $current)) {
+            $object['status'] = $current['status'];
+        }
+
+        return $object;
     }
 
     private function delete(string $partition, ApiPath $api, bool $dryRun): Response
