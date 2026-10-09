@@ -24,14 +24,46 @@ class PersistentVolume extends Resource
 
     protected string $kind = 'PersistentVolume';
 
+    /**
+     * The `PersistentVolumeSource` fields. The apiserver embeds them inline in `spec`
+     * (`spec.nfs`, `spec.csi`, …) — there is no `spec.source` — and a volume has
+     * exactly one.
+     */
+    public const array VOLUME_SOURCES = [
+        'awsElasticBlockStore', 'azureDisk', 'azureFile', 'cephfs', 'cinder', 'csi', 'fc',
+        'flexVolume', 'flocker', 'gcePersistentDisk', 'glusterfs', 'hostPath', 'iscsi',
+        'local', 'nfs', 'photonPersistentDisk', 'portworxVolume', 'quobyte', 'rbd',
+        'scaleIO', 'storageos', 'vsphereVolume',
+    ];
+
+    /**
+     * Set the volume source (`setSource('nfs', ['server' => …, 'path' => …])`),
+     * replacing any other source already set.
+     */
     public function setSource(string $name, mixed $parameters): static
     {
-        return $this->setSpec("source.$name", $parameters);
+        foreach (self::VOLUME_SOURCES as $source) {
+            if ($source !== $name) {
+                $this->removeSpec($source);
+            }
+        }
+
+        return $this->setSpec($name, $parameters);
     }
 
+    /**
+     * One source's parameters, or — without a name — the source set on the volume,
+     * keyed by its type (`['csi' => [...]]`); null when there is none.
+     */
     public function getSource(?string $name = null): mixed
     {
-        return $this->getSpec($name ? "source.$name" : 'source');
+        if ($name !== null) {
+            return $this->getSpec($name);
+        }
+
+        $sources = array_intersect_key((array) $this->getAttribute('spec', []), array_flip(self::VOLUME_SOURCES));
+
+        return $sources === [] ? null : $sources;
     }
 
     public function setCapacity(int $size, string $measure = 'Gi'): static

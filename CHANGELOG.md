@@ -10,6 +10,11 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 
 - `Volume::emptyDirectory()` without options now sends `emptyDir: {}`. It used to send the
   string `"{}"`, which the apiserver rejected (400) for every pod built that way.
+- `PersistentVolume::setSource()` / `getSource()` now use the inline volume-source fields
+  (`spec.nfs`, `spec.csi`, …) the apiserver expects. They used to read and write a
+  non-existent `spec.source.<type>`, so no PersistentVolume built with `setSource()` was
+  valid and `getSource()` never read a real one. `setSource()` now replaces any other source,
+  and `getSource()` without a name returns the source keyed by its type (`['csi' => [...]]`).
 
 ## 1.0.0 - 2026-10-03
 
