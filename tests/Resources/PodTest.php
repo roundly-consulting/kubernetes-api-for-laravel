@@ -6,6 +6,7 @@ use RoundlyConsulting\KubernetesApi\Resources\Pod;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
 use RoundlyConsulting\KubernetesApi\Resources\Types\Container;
 use RoundlyConsulting\KubernetesApi\Resources\Types\ContainerStatus;
+use RoundlyConsulting\KubernetesApi\Resources\Types\EmptyObject;
 use RoundlyConsulting\KubernetesApi\Resources\Types\Volume;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSpec;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasStatus;
@@ -137,12 +138,15 @@ it('adds volume to spec', function () {
 
     $pod->addVolume(Volume::make()->emptyDirectory('temp'));
 
-    expect($pod->getSpec('volumes'))->toBe([
+    expect($pod->getSpec('volumes'))->toEqual([
         [
-            'emptyDir' => '{}',
+            'emptyDir' => new EmptyObject,
             'name' => 'temp',
         ],
     ]);
+
+    // The apiserver decodes `emptyDir` as a struct: it must go out as `{}`, not "{}".
+    expect(json_decode($pod->setName('p')->toJson())->spec->volumes[0]->emptyDir)->toEqual(new stdClass);
 });
 
 it('adds multiple volumes at once', function () {
@@ -164,7 +168,7 @@ it('sets volumes', function () {
         'spec' => [
             'volumes' => [
                 [
-                    'emptyDir' => '{}',
+                    'emptyDir' => new EmptyObject,
                     'name' => 'temp',
                 ],
             ],
@@ -175,9 +179,9 @@ it('sets volumes', function () {
         Volume::make()->emptyDirectory('logs'),
     ]);
 
-    expect($pod->getSpec('volumes'))->toBe([
+    expect($pod->getSpec('volumes'))->toEqual([
         [
-            'emptyDir' => '{}',
+            'emptyDir' => new EmptyObject,
             'name' => 'logs',
         ],
     ]);
@@ -188,7 +192,7 @@ it('returns volumes', function () {
         'spec' => [
             'volumes' => [
                 [
-                    'emptyDir' => '{}',
+                    'emptyDir' => new EmptyObject,
                     'name' => 'temp',
                 ],
             ],
@@ -205,7 +209,7 @@ it('returns volumes', function () {
         ->getName()
         ->toBe('temp')
         ->getEmptyDir()
-        ->toBe('{}');
+        ->toBe([]);
 });
 
 it('returns container statuses', function () {

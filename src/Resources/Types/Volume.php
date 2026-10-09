@@ -19,11 +19,16 @@ class Volume extends Type
             ->mountTo($mountPath, $subPath);
     }
 
-    /** @param array<string, mixed> $options */
+    /**
+     * `emptyDir` is a struct: with no options it is the empty object `{}`, which the
+     * apiserver reads as "all defaults" — never the string "{}", which it cannot decode.
+     *
+     * @param  array<string, mixed>  $options
+     */
     public function emptyDirectory(string $name, array $options = []): static
     {
         return $this->setAttribute('name', $name)
-            ->setAttribute('emptyDir', empty($options) ? '{}' : $options);
+            ->setAttribute('emptyDir', $options === [] ? new EmptyObject : $options);
     }
 
     public function fromSecret(Secret $secret): static

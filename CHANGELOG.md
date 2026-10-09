@@ -6,6 +6,11 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- `Volume::emptyDirectory()` without options now sends `emptyDir: {}`. It used to send the
+  string `"{}"`, which the apiserver rejected (400) for every pod built that way.
+
 ## 1.0.0 - 2026-10-03
 
 Initial public release.

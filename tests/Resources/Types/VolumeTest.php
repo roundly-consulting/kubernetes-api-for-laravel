@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use RoundlyConsulting\KubernetesApi\Resources\ConfigMap;
 use RoundlyConsulting\KubernetesApi\Resources\Secret;
+use RoundlyConsulting\KubernetesApi\Resources\Types\EmptyObject;
 use RoundlyConsulting\KubernetesApi\Resources\Types\Volume;
 
 it('creates volume mount instance with given volume name', function () {
@@ -19,10 +20,12 @@ it('creates volume mount instance with given volume name', function () {
 it('sets volume as empty directory', function () {
     $volume = Volume::make()->emptyDirectory('temp');
 
-    expect($volume->toArray())->toBe([
-        'emptyDir' => '{}',
+    // `emptyDir` is a struct: with no options it must encode as the empty object
+    // `{}`, never as the string "{}" the apiserver cannot decode.
+    expect($volume->toArray())->toEqual([
+        'emptyDir' => new EmptyObject,
         'name' => 'temp',
-    ]);
+    ])->and($volume->toJson())->toBe('{"emptyDir":{},"name":"temp"}');
 
     $volume = Volume::make()->emptyDirectory('temp', ['sizeLimit' => '500Mi']);
 
