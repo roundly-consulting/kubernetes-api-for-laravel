@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
 use RoundlyConsulting\KubernetesApi\Resources\Secret;
+use RoundlyConsulting\KubernetesApi\Support\JsonPayload;
 
 it('extends resource class', function () {
     expect(Secret::class)->toUse(Resource::class);
@@ -115,4 +116,12 @@ it('drops the data map once its last key is removed, instead of sending a json l
 
     expect($secret->toArray())->not->toHaveKey('data')
         ->and($secret->getData())->toBe([]);
+});
+
+it('sends numeric-string data keys as an object, never a json list', function () {
+    $decoded = Secret::make(JsonPayload::decode('{"metadata":{"name":"s"},"data":{"0":"YQ=="}}'));
+
+    expect($decoded->toJson())->toContain('"data":{"0":"YQ=="}')
+        ->and(Secret::make()->setName('s')->setData(['0' => 'a'])->toJson())->toContain('"data":{"0":"YQ=="}')
+        ->and(Secret::make()->setAttribute('stringData', ['0' => 'a'])->toJson())->toContain('"stringData":{"0":"a"}');
 });

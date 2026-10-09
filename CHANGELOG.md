@@ -58,6 +58,10 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   `setPlural()` and `usingNamespaces()`. A listed generic resource (list items carry no
   kind/apiVersion) could not be written back, and a namespaced one wrote to the
   cluster-scoped path.
+- ConfigMap `data` / `binaryData`, Secret `data` / `stringData` and `metadata.labels` /
+  `annotations` now always encode as JSON objects. Keys that are numeric strings (`"0"`,
+  `"1"`) used to turn the map into a JSON list, whether it was decoded from the apiserver or set
+  with `setData(['0' => …])`, and the apiserver answered 400.
 
 ## 1.0.0 - 2026-10-03
 

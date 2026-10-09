@@ -50,4 +50,10 @@ class ConfigMap extends Resource
             ? $this->removeAttribute('data')
             : $this->setAttribute('data', $data);
     }
+
+    /** @return list<string> */
+    protected function objectAttributes(): array
+    {
+        return [...parent::objectAttributes(), 'data', 'binaryData'];
+    }
 }

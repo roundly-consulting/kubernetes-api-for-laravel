@@ -6,6 +6,7 @@ namespace RoundlyConsulting\KubernetesApi\Resources;
 
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Jsonable;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Traits\Conditionable;
 use RoundlyConsulting\KubernetesApi\Traits\Makeable;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\ExecutesClusterOperations;
@@ -73,6 +74,30 @@ class Resource implements Arrayable, Jsonable
 
     public function toJson($options = JSON_THROW_ON_ERROR): string
     {
-        return (string) json_encode($this->toArray(), $options | JSON_THROW_ON_ERROR);
+        $payload = $this->toArray();
+
+        // PHP turns numeric-string keys ("0", "1") into a list, which would encode as a
+        // JSON list where the apiserver expects a `map[string]…` (400): these maps go
+        // out as objects whatever their keys.
+        foreach ($this->objectAttributes() as $path) {
+            $value = Arr::get($payload, $path);
+
+            if (is_array($value) && $value !== [] && array_is_list($value)) {
+                Arr::set($payload, $path, (object) $value);
+            }
+        }
+
+        return (string) json_encode($payload, $options | JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * The attribute paths that hold string-keyed maps, encoded as JSON objects even when
+     * their keys are numeric strings.
+     *
+     * @return list<string>
+     */
+    protected function objectAttributes(): array
+    {
+        return ['metadata.labels', 'metadata.annotations'];
     }
 }

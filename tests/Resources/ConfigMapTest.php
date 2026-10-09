@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use RoundlyConsulting\KubernetesApi\Resources\ConfigMap;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
+use RoundlyConsulting\KubernetesApi\Support\JsonPayload;
 
 it('extends resource class', function () {
     expect(ConfigMap::class)->toUse(Resource::class);
@@ -61,4 +62,21 @@ it('drops the data map once its last key is removed, instead of sending a json l
     expect($cm->toArray())->not->toHaveKey('data')
         ->and($cm->toJson())->not->toContain('"data"')
         ->and($cm->getData())->toBe([]);
+});
+
+it('sends numeric-string data keys as an object, never a json list', function () {
+    // PHP turns the keys "0", "1" into a list, which encodes as `["a","b"]` and gets a
+    // 400 for a `map[string]string`.
+    $decoded = ConfigMap::make(JsonPayload::decode('{"metadata":{"name":"c"},"data":{"0":"a","1":"b"}}'));
+
+    expect($decoded->toJson())->toContain('"data":{"0":"a","1":"b"}')
+        ->and(ConfigMap::make()->setName('c')->setData(['0' => 'a'])->toJson())->toContain('"data":{"0":"a"}')
+        ->and(ConfigMap::make()->setAttribute('binaryData', ['0' => 'YQ=='])->toJson())->toContain('"binaryData":{"0":"YQ=="}');
+});
+
+it('sends numeric-string label and annotation keys as objects', function () {
+    $json = ConfigMap::make()->setName('c')->setLabels(['0' => 'a'])->setAnnotations(['0' => 'b'])->toJson();
+
+    expect($json)->toContain('"labels":{"0":"a"}')
+        ->and($json)->toContain('"annotations":{"0":"b"}');
 });

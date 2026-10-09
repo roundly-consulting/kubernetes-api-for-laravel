@@ -94,4 +94,10 @@ class Secret extends Resource
 
         return $this->setAttribute('data', $data);
     }
+
+    /** @return list<string> */
+    protected function objectAttributes(): array
+    {
+        return [...parent::objectAttributes(), 'data', 'stringData'];
+    }
 }
