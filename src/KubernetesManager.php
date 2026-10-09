@@ -178,7 +178,8 @@ class KubernetesManager
 
     /**
      * A new ad-hoc cluster from a kubeconfig context — the file's `current-context`
-     * and the standard path / `KUBECONFIG` env by default.
+     * and the standard path / `KUBECONFIG` env by default. The context's namespace, if
+     * it names one, is the cluster's default namespace.
      *
      * @throws KubeConfigException
      */
@@ -316,10 +317,11 @@ class KubernetesManager
             }),
         };
 
+        // The cluster's own `namespace` wins, then a kubeconfig context's, then `default`.
         return $this->newCluster($name)
             ->applyConfig($connection)
             ->withManagerName($string('manager', $definition['manager'] ?? null))
-            ->withDefaultNamespace($string('namespace', $definition['namespace'] ?? null) ?? 'default');
+            ->withDefaultNamespace($string('namespace', $definition['namespace'] ?? null) ?? $connection->namespace ?? 'default');
     }
 
     /**

@@ -68,7 +68,9 @@ final class Cluster
     }
 
     /**
-     * A copy of this client with a kubeconfig/in-cluster connection applied.
+     * A copy of this client with a kubeconfig/in-cluster connection applied. A
+     * kubeconfig context's namespace becomes the default namespace — never over a
+     * namespace scope, which stays the boundary it is.
      */
     public function applyConfig(KubeConfig $config): self
     {
@@ -78,6 +80,10 @@ final class Cluster
             ->withCertificate($config->clientCertificatePath)
             ->withPrivateKey($config->clientKeyPath)
             ->withCaCertificate($config->certificateAuthorityPath);
+
+        if ($config->namespace !== null && $this->namespaceScope === null) {
+            $cluster = $cluster->withDefaultNamespace($config->namespace);
+        }
 
         return $config->verify ? $cluster->withSslVerification() : $cluster->withoutSslVerification();
     }

@@ -11,7 +11,8 @@ namespace RoundlyConsulting\KubernetesApi\DataTransferObjects;
  *
  * `tokenFile` is a bearer-token file read again for every request (a rotated
  * service-account token, a kubeconfig `tokenFile`); `token` is its content at load
- * time, used while the file cannot be read.
+ * time, used while the file cannot be read. `namespace` is the kubeconfig context's
+ * namespace, if it names one.
  */
 final readonly class KubeConfig
 {
@@ -23,6 +24,7 @@ final readonly class KubeConfig
         public ?string $certificateAuthorityPath = null,
         public bool $verify = true,
         public ?string $tokenFile = null,
+        public ?string $namespace = null,
     ) {}
 
     public function hasClientCertificate(): bool

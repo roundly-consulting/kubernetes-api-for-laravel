@@ -16,6 +16,7 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - `Container::setImage($image, null)` sets an image without a tag.
 - `Volume::fromSecret()` / `fromConfigMap()` take an optional volume name as their second
   argument.
+- `KubeConfig::$namespace`: the kubeconfig context's namespace.
 
 ### Fixed
 
@@ -83,6 +84,13 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - Without an explicit path the kubeconfig loader now merges every file in `KUBECONFIG`, like
   kubectl: missing files are skipped and the first file to set a value wins. Only the first
   path used to be read, and a missing first file failed the load.
+- A kubeconfig context's `namespace` is now used: `Kubernetes::fromKubeConfig()` /
+  `connect()` take it as the cluster's default namespace, and so does a `kubeconfig`-source
+  cluster that sets no `namespace` of its own. Behaviour change: the shipped
+  `clusters.default.namespace` no longer defaults to `'default'` (it is
+  `env('KUBERNETES_NAMESPACE')`), so the order is the cluster's `namespace`, then the
+  context's, then `default`. A published config still carrying `'default'` keeps the old
+  behaviour.
 
 ## 1.0.0 - 2026-10-03
 

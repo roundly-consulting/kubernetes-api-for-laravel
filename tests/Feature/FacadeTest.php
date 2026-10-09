@@ -484,3 +484,56 @@ it('serves the same API to an injected manager', function (): void {
         ->and($manager->version()->gitVersion)->toBe('v1.34.0')
         ->and($manager->deployments()->getCluster())->toBe($manager->cluster());
 });
+
+function teamKubeConfig(): string
+{
+    $path = (string) tempnam(sys_get_temp_dir(), 'kc-');
+    file_put_contents($path, <<<'YAML'
+        apiVersion: v1
+        current-context: ctx
+        clusters:
+          - name: c
+            cluster:
+              server: https://api:6443
+        users:
+          - name: u
+            user:
+              token: from-file
+        contexts:
+          - name: ctx
+            context:
+              cluster: c
+              user: u
+              namespace: team-a
+        YAML);
+
+    return $path;
+}
+
+it('uses the kubeconfig context namespace unless the cluster config names one', function (): void {
+    $path = teamKubeConfig();
+
+    config()->set('kubernetes.clusters.team', ['source' => 'kubeconfig', 'kubeconfig' => $path]);
+    config()->set('kubernetes.clusters.ops', ['source' => 'kubeconfig', 'kubeconfig' => $path, 'namespace' => 'ops']);
+
+    try {
+        expect(Kubernetes::fromKubeConfig($path)->defaultNamespace())->toBe('team-a')
+            ->and(Kubernetes::cluster('team')->defaultNamespace())->toBe('team-a')
+            ->and(Kubernetes::cluster('team')->configMaps()->getNamespace())->toBe('team-a')
+            ->and(Kubernetes::cluster('ops')->defaultNamespace())->toBe('ops');
+    } finally {
+        @unlink($path);
+    }
+});
+
+it('ships no namespace default, so a kubeconfig context namespace can apply', function (): void {
+    // Unset in the shipped config: `default` is only the final fallback.
+    expect(require __DIR__.'/../../config/kubernetes.php')
+        ->toHaveKey('clusters.default.namespace')
+        ->and((require __DIR__.'/../../config/kubernetes.php')['clusters']['default']['namespace'])->toBeNull()
+        ->and(Kubernetes::url('https://k8s.example')->defaultNamespace())->toBe('default');
+
+    config()->set('kubernetes.clusters.default', ['url' => 'https://k8s.example']);
+
+    expect(Kubernetes::cluster()->defaultNamespace())->toBe('default');
+});

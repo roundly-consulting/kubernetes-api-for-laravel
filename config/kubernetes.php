@@ -21,7 +21,8 @@ return [
      *                   file merged like kubectl, or ~/.kube/config) and `context`
      *                   (null = current-context);
      *  - `in-cluster` — the service account mounted into the pod.
-     * `namespace` is the default for namespaced resources; `manager` is your app's
+     * `namespace` is the default for namespaced resources (not set = the kubeconfig
+     * context's namespace for a `kubeconfig` source, else `default`); `manager` is your app's
      * field manager, sent as `fieldManager` on every write (a server-side apply
      * without one uses `kubernetes-api-for-laravel`) and as the user agent. Clusters
      * registered with `Kubernetes::registerCluster()` override entries of the same name.
@@ -41,7 +42,7 @@ return [
             'verify' => env('KUBERNETES_VERIFY_SSL', true),
             'kubeconfig' => env('KUBERNETES_KUBECONFIG'),
             'context' => env('KUBERNETES_CONTEXT'),
-            'namespace' => env('KUBERNETES_NAMESPACE', 'default'),
+            'namespace' => env('KUBERNETES_NAMESPACE'),
             'manager' => env('KUBERNETES_MANAGER'),
         ],
     ],

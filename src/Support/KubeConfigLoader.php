@@ -64,6 +64,7 @@ final class KubeConfigLoader
             certificateAuthorityPath: $this->resolvePem($cluster, 'certificate-authority', 'certificate-authority-data', 'ca'),
             verify: ! $insecure,
             tokenFile: $tokenFile,
+            namespace: is_string($contextData['namespace'] ?? null) && $contextData['namespace'] !== '' ? $contextData['namespace'] : null,
         );
     }
 

@@ -116,6 +116,14 @@ it('applies a kubeconfig to a copy of the client', function () {
         ->and($blank->getUrl())->toBe('');
 });
 
+it('applies a kubeconfig namespace as the default namespace, never over a scope', function () {
+    $config = new KubeConfig(server: 'https://api.test:6443', namespace: 'team-a');
+
+    expect((new Cluster)->applyConfig($config)->defaultNamespace())->toBe('team-a')
+        ->and((new Cluster)->applyConfig(new KubeConfig(server: 'https://api.test:6443'))->defaultNamespace())->toBe('default')
+        ->and((new Cluster)->namespace('shop')->applyConfig($config)->defaultNamespace())->toBe('shop');
+});
+
 it('sends a raw request through the transport', function () {
     Http::fake(['https://k8s.example/healthz?verbose=1' => Http::response('ok')]);
 

@@ -583,3 +583,36 @@ it('throws when no KUBECONFIG file exists', function () {
         putenv('KUBECONFIG');
     }
 })->throws(KubeConfigException::class, 'Kubeconfig not found at /no/such/a, /no/such/b.');
+
+it('carries the context namespace', function () {
+    // kubectl reads a context as cluster + user + namespace; the namespace used to be dropped.
+    $path = writeKubeConfig(<<<'YAML'
+        apiVersion: v1
+        current-context: team
+        clusters:
+          - name: c
+            cluster:
+              server: https://x
+        users:
+          - name: u
+            user:
+              token: t
+        contexts:
+          - name: team
+            context:
+              cluster: c
+              user: u
+              namespace: team-a
+          - name: plain
+            context:
+              cluster: c
+              user: u
+        YAML);
+
+    try {
+        expect((new KubeConfigLoader)->load($path)->namespace)->toBe('team-a')
+            ->and((new KubeConfigLoader)->load($path, 'plain')->namespace)->toBeNull();
+    } finally {
+        @unlink($path);
+    }
+});
