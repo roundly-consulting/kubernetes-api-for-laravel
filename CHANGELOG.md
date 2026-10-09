@@ -62,6 +62,9 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   `annotations` now always encode as JSON objects. Keys that are numeric strings (`"0"`,
   `"1"`) used to turn the map into a JSON list, whether it was decoded from the apiserver or set
   with `setData(['0' => …])`, and the apiserver answered 400.
+- `ConfigMap::setData([])` and `Secret::setData([])` now remove `data`, and `setLabels([])` /
+  `setAnnotations([])` (and removing the last label or annotation) send `{}`. All four used to
+  send the JSON list `[]`, which the apiserver answered with a 400.
 
 ## 1.0.0 - 2026-10-03
 

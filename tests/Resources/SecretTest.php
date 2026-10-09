@@ -125,3 +125,11 @@ it('sends numeric-string data keys as an object, never a json list', function ()
         ->and(Secret::make()->setName('s')->setData(['0' => 'a'])->toJson())->toContain('"data":{"0":"YQ=="}')
         ->and(Secret::make()->setAttribute('stringData', ['0' => 'a'])->toJson())->toContain('"stringData":{"0":"a"}');
 });
+
+it('drops the data map when set to an empty one, instead of sending a json list', function () {
+    $secret = Secret::make()->setName('s')->setData(['a' => 'b'])->setData([]);
+
+    expect($secret->toJson())->not->toContain('[]')
+        ->and($secret->toArray())->not->toHaveKey('data')
+        ->and($secret->getData())->toBe([]);
+});

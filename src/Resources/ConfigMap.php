@@ -25,10 +25,15 @@ class ConfigMap extends Resource
         return $data[$key] ?? $default;
     }
 
-    /** @param array<string, string> $data */
+    /**
+     * Replace the data. An empty map removes the field: `[]` would encode as a JSON
+     * list, which the apiserver refuses for `data`.
+     *
+     * @param  array<string, string>  $data
+     */
     public function setData(array $data): static
     {
-        return $this->setAttribute('data', $data);
+        return $data === [] ? $this->removeAttribute('data') : $this->setAttribute('data', $data);
     }
 
     public function addData(string $name, string $value): static

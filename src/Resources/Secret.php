@@ -35,9 +35,18 @@ class Secret extends Resource
         return $data[$key] ?? $default;
     }
 
-    /** @param array<string, string> $data */
+    /**
+     * Replace the data, base64-encoding each value. An empty map removes the field:
+     * `[]` would encode as a JSON list, which the apiserver refuses for `data`.
+     *
+     * @param  array<string, string>  $data
+     */
     public function setData(array $data): static
     {
+        if ($data === []) {
+            return $this->removeAttribute('data');
+        }
+
         foreach ($data as $key => &$value) {
             $value = base64_encode($value);
         }

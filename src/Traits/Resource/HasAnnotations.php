@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\KubernetesApi\Traits\Resource;
 
 use Illuminate\Support\Arr;
+use RoundlyConsulting\KubernetesApi\Resources\Types\EmptyObject;
 
 trait HasAnnotations
 {
@@ -13,7 +14,8 @@ trait HasAnnotations
     /** @param array<string, string> $annotations */
     public function setAnnotations(array $annotations): static
     {
-        $this->setAttribute('metadata.annotations', $annotations);
+        // An empty map goes out as `{}`: `[]` is a JSON list, which the apiserver refuses.
+        $this->setAttribute('metadata.annotations', $annotations === [] ? new EmptyObject : $annotations);
 
         return $this;
     }

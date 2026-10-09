@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\KubernetesApi\Traits\Resource;
 
 use Illuminate\Support\Arr;
+use RoundlyConsulting\KubernetesApi\Resources\Types\EmptyObject;
 
 trait HasLabels
 {
@@ -13,7 +14,8 @@ trait HasLabels
     /** @param array<string, string> $labels */
     public function setLabels(array $labels): static
     {
-        $this->setAttribute('metadata.labels', $labels);
+        // An empty map goes out as `{}`: `[]` is a JSON list, which the apiserver refuses.
+        $this->setAttribute('metadata.labels', $labels === [] ? new EmptyObject : $labels);
 
         return $this;
     }

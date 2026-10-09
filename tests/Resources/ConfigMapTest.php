@@ -80,3 +80,11 @@ it('sends numeric-string label and annotation keys as objects', function () {
     expect($json)->toContain('"labels":{"0":"a"}')
         ->and($json)->toContain('"annotations":{"0":"b"}');
 });
+
+it('drops the data map when set to an empty one, instead of sending a json list', function () {
+    $cm = ConfigMap::make()->setName('c')->setData(['a' => 'b'])->setData([]);
+
+    expect($cm->toJson())->not->toContain('[]')
+        ->and($cm->toArray())->not->toHaveKey('data')
+        ->and($cm->getData())->toBe([]);
+});
