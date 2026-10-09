@@ -31,6 +31,11 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   starting with `/` free of backticks and whitespace. A value such as
   ``a.test`) || Host(`victim.test`` used to inject extra matchers into the rule. Raw rules
   still go through `matchRule()`.
+- The label selector builders (`whereLabel()`, `whereLabelNot()`, `whereLabelIn()`,
+  `whereLabelNotIn()`, `whereLabelExists()`, `whereLabelMissing()`) now validate keys and
+  values against the Kubernetes label grammar and throw `InvalidResourceException` before
+  any request. `whereLabelIn('tenant', ['acme,globex'])` used to widen a tenant filter to
+  both tenants.
 
 ## 1.0.0 - 2026-10-03
 

@@ -77,18 +77,49 @@ it('reports whether label selectors are present', function () {
 });
 
 it('encodes selector values so they cannot inject query parameters', function () {
-    $this->pods->whereLabel('tenant', 'acme&watch=true&x')->whereField('spec.nodeName', 'n+1')->get();
+    // Label values are validated against the label grammar (see below), so the
+    // query-encoding probe goes through the field selector, which takes any value.
+    $this->pods->whereLabel('tenant', 'acme')->whereField('metadata.name', 'acme&watch=true&x+1')->get();
 
     Http::assertSent(function (Request $r): bool {
         parse_str((string) parse_url($r->url(), PHP_URL_QUERY), $query);
 
         return $query === [
             'pretty' => '1',
-            'labelSelector' => 'tenant=acme&watch=true&x',
-            'fieldSelector' => 'spec.nodeName=n+1',
-        ] && str_contains($r->url(), 'labelSelector=tenant%3Dacme%26watch%3Dtrue%26x')
-            && str_contains($r->url(), 'fieldSelector=spec.nodeName%3Dn%2B1');
+            'labelSelector' => 'tenant=acme',
+            'fieldSelector' => 'metadata.name=acme&watch=true&x+1',
+        ] && str_contains($r->url(), 'fieldSelector=metadata.name%3Dacme%26watch%3Dtrue%26x%2B1');
     });
+});
+
+it('refuses label keys and values outside the label grammar', function (Closure $select) {
+    // `whereLabelIn('tenant', ['acme,globex'])` used to widen a tenant filter to both
+    // tenants: a label value can never hold a comma, an `=` or a parenthesis.
+    expect(fn () => $select($this->pods))->toThrow(InvalidArgumentException::class);
+
+    Http::assertNothingSent();
+})->with([
+    'comma in an in-set value' => [fn (Pod $pods) => $pods->whereLabelIn('tenant', ['acme,globex'])->get()],
+    'comma in a notin value' => [fn (Pod $pods) => $pods->whereLabelNotIn('tenant', ['a,b'])->get()],
+    'comma in an equality value' => [fn (Pod $pods) => $pods->whereLabel('tenant', 'a,b')->get()],
+    'equals sign in a value' => [fn (Pod $pods) => $pods->whereLabel('tenant', 'a=b')->get()],
+    'parenthesis in a value' => [fn (Pod $pods) => $pods->whereLabelNot('tenant', 'a)')->get()],
+    'value over 63 characters' => [fn (Pod $pods) => $pods->whereLabel('tenant', str_repeat('a', 64))->get()],
+    'comma in a key' => [fn (Pod $pods) => $pods->whereLabel('a,b', 'c')->get()],
+    'space in an existence key' => [fn (Pod $pods) => $pods->whereLabelExists('app in (x)')->get()],
+    'bang in a missing key' => [fn (Pod $pods) => $pods->whereLabelMissing('!app')->get()],
+    'empty key' => [fn (Pod $pods) => $pods->whereLabel('', 'x')->get()],
+    'invalid key prefix' => [fn (Pod $pods) => $pods->whereLabel('Example.COM/app', 'x')->get()],
+]);
+
+it('accepts prefixed keys, empty values and an empty set', function () {
+    $this->pods
+        ->whereLabel('app.kubernetes.io/name', 'web_1.x-y')
+        ->whereLabel('tier', '')
+        ->whereLabelIn('app', [])
+        ->get();
+
+    Http::assertSent(fn (Request $r): bool => urldecode($r->url()) === 'https://localhost/api/v1/namespaces/production/pods?pretty=1&labelSelector=app.kubernetes.io/name=web_1.x-y,tier=,app in ()');
 });
 
 it('encodes raw request query values and keeps repeated keys unindexed', function () {

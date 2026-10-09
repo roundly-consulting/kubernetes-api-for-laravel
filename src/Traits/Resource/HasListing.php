@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Traits\Resource;
 
+use RoundlyConsulting\KubernetesApi\Exceptions\InvalidResourceException;
 use RoundlyConsulting\KubernetesApi\Exceptions\NamespaceScopeException;
 
 trait HasListing
@@ -22,46 +23,66 @@ trait HasListing
 
     protected bool $allNamespaces = false;
 
+    /**
+     * @throws InvalidResourceException for a key or value outside the label grammar
+     */
     public function whereLabel(string $key, string $value): static
     {
-        $this->labelSelectors[] = "{$key}={$value}";
+        $this->labelSelectors[] = self::labelKey($key).'='.self::labelValue($value);
 
         return $this;
     }
 
+    /**
+     * @throws InvalidResourceException for a key or value outside the label grammar
+     */
     public function whereLabelNot(string $key, string $value): static
     {
-        $this->labelSelectors[] = "{$key}!={$value}";
+        $this->labelSelectors[] = self::labelKey($key).'!='.self::labelValue($value);
 
         return $this;
     }
 
-    /** @param list<string> $values */
+    /**
+     * @param  list<string>  $values
+     *
+     * @throws InvalidResourceException for a key or value outside the label grammar
+     */
     public function whereLabelIn(string $key, array $values): static
     {
-        $this->labelSelectors[] = "{$key} in (".implode(',', $values).')';
+        $this->labelSelectors[] = self::labelKey($key).' in ('.implode(',', array_map(self::labelValue(...), $values)).')';
 
         return $this;
     }
 
-    /** @param list<string> $values */
+    /**
+     * @param  list<string>  $values
+     *
+     * @throws InvalidResourceException for a key or value outside the label grammar
+     */
     public function whereLabelNotIn(string $key, array $values): static
     {
-        $this->labelSelectors[] = "{$key} notin (".implode(',', $values).')';
+        $this->labelSelectors[] = self::labelKey($key).' notin ('.implode(',', array_map(self::labelValue(...), $values)).')';
 
         return $this;
     }
 
+    /**
+     * @throws InvalidResourceException for a key outside the label grammar
+     */
     public function whereLabelExists(string $key): static
     {
-        $this->labelSelectors[] = $key;
+        $this->labelSelectors[] = self::labelKey($key);
 
         return $this;
     }
 
+    /**
+     * @throws InvalidResourceException for a key outside the label grammar
+     */
     public function whereLabelMissing(string $key): static
     {
-        $this->labelSelectors[] = "!{$key}";
+        $this->labelSelectors[] = '!'.self::labelKey($key);
 
         return $this;
     }
@@ -126,6 +147,51 @@ trait HasListing
     public function listsAllNamespaces(): bool
     {
         return $this->allNamespaces;
+    }
+
+    /**
+     * A label key: an optional DNS-subdomain prefix and `/`, then a name of at most 63
+     * characters. Validated so no key can carry an operator, a comma or a space into the
+     * selector and change what it matches.
+     *
+     * @throws InvalidResourceException
+     */
+    private static function labelKey(string $key): string
+    {
+        $prefix = null;
+        $name = $key;
+
+        if (str_contains($key, '/')) {
+            [$prefix, $name] = explode('/', $key, 2);
+        }
+
+        $subdomain = '/^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*\z/';
+
+        if (($prefix !== null && (strlen($prefix) > 253 || preg_match($subdomain, $prefix) !== 1)) || ! self::isLabelName($name)) {
+            throw InvalidResourceException::invalidSegment('label key', $key);
+        }
+
+        return $key;
+    }
+
+    /**
+     * A label value: empty, or a name of at most 63 characters — never a comma, `=`,
+     * parenthesis or space, any of which would widen or rewrite the selector.
+     *
+     * @throws InvalidResourceException
+     */
+    private static function labelValue(string $value): string
+    {
+        if ($value !== '' && ! self::isLabelName($value)) {
+            throw InvalidResourceException::invalidSegment('label value', $value);
+        }
+
+        return $value;
+    }
+
+    private static function isLabelName(string $name): bool
+    {
+        return strlen($name) <= 63 && preg_match('/^[A-Za-z0-9](?:[-A-Za-z0-9_.]*[A-Za-z0-9])?\z/', $name) === 1;
     }
 
     /**
