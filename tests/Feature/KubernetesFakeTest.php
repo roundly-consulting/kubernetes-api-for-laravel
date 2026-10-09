@@ -197,6 +197,43 @@ it('paginates with limit and continue', function (): void {
         ->and($everything)->toHaveCount(5);
 });
 
+it('leaves the builder on its own page after lazy iteration', function (): void {
+    // lazy() used to leave the last continue token on the builder: a second lazy()
+    // or get() returned only the last page.
+    Kubernetes::fake()->seed('configMaps', array_map(
+        fn (string $name): array => ['metadata' => ['name' => $name]],
+        ['a', 'b', 'c'],
+    ));
+
+    $names = fn (iterable $items): array => array_map(fn (ConfigMap $item): ?string => $item->getName(), [...$items]);
+    $builder = Kubernetes::configMaps()->limit(1);
+
+    expect($names($builder->lazy()))->toBe(['a', 'b', 'c'])
+        ->and($names($builder->lazy()))->toBe(['a', 'b', 'c'])
+        ->and($names($builder->get()))->toBe(['a']);
+
+    $names = [];
+    $builder->each(function (ConfigMap $item) use (&$names): void {
+        $names[] = $item->getName();
+    });
+
+    expect($names)->toBe(['a', 'b', 'c'])
+        ->and($builder->get()->map(fn (ConfigMap $item): ?string => $item->getName())->all())->toBe(['a']);
+});
+
+it('starts lazy iteration from a set continue token and keeps it', function (): void {
+    Kubernetes::fake()->seed('configMaps', array_map(
+        fn (string $name): array => ['metadata' => ['name' => $name]],
+        ['a', 'b', 'c'],
+    ));
+
+    $builder = Kubernetes::configMaps()->limit(1)->continueFrom('1');
+    $names = array_map(fn (ConfigMap $item): ?string => $item->getName(), [...$builder->lazy()]);
+
+    expect($names)->toBe(['b', 'c'])
+        ->and($builder->get()->map(fn (ConfigMap $item): ?string => $item->getName())->all())->toBe(['b']);
+});
+
 it('lists across namespaces and keeps namespaces apart', function (): void {
     Kubernetes::fake()->seed(Deployment::class, [web(namespace: 'prod'), web(namespace: 'staging')]);
 

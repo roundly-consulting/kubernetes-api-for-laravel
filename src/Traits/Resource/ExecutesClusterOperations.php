@@ -67,7 +67,9 @@ trait ExecutesClusterOperations
 
     /**
      * Lazily iterate every matching resource, transparently following the
-     * apiserver's `continue` tokens to load further pages on demand.
+     * apiserver's `continue` tokens to load further pages on demand. The builder's own
+     * `continueFrom()` token is the starting point and is left as it was, so the
+     * builder can be iterated (or listed) again.
      *
      * @param  array<string, mixed>  $query
      * @return Generator<int, resource>
@@ -77,7 +79,13 @@ trait ExecutesClusterOperations
         $token = $this->continueToken;
 
         do {
-            $page = $this->continueFrom($token)->getPage($query);
+            $own = $this->continueToken;
+
+            try {
+                $page = $this->continueFrom($token)->getPage($query);
+            } finally {
+                $this->continueToken = $own;
+            }
 
             foreach ($page->items as $item) {
                 yield $item;

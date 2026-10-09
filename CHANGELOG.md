@@ -51,6 +51,8 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - Kubeconfig users that authenticate with an `exec` plugin, an `auth-provider` or a
   username/password now throw `KubeConfigException` naming the user and the method. They used
   to load with no credentials, so every request went out anonymous (401/403) with no hint why.
+- `lazy()` and `each()` no longer leave the last `continue` token on the builder. A second
+  `lazy()` or a `get()` on the same builder used to return only the last page.
 
 ## 1.0.0 - 2026-10-03
 
