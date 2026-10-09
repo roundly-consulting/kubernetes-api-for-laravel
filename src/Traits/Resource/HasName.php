@@ -13,8 +13,13 @@ trait HasName
         return $this->setAttribute('metadata.name', $name);
     }
 
-    public function getName(): string
+    /**
+     * The name, or null for an unnamed resource (a pod template, a `generateName` create).
+     */
+    public function getName(): ?string
     {
-        return $this->getAttribute('metadata.name');
+        $name = $this->getAttribute('metadata.name');
+
+        return is_string($name) ? $name : null;
     }
 }

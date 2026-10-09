@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use RoundlyConsulting\KubernetesApi\Exceptions\InvalidResourceException;
 use RoundlyConsulting\KubernetesApi\Resources\ConfigMap;
 use RoundlyConsulting\KubernetesApi\Resources\Secret;
 use RoundlyConsulting\KubernetesApi\Resources\Types\EmptyObject;
@@ -39,7 +40,7 @@ it('sets volume as empty directory', function () {
 
 it('sets volume source from secret', function () {
     $secret = $this->mock(Secret::class);
-    $secret->shouldReceive('getName')->twice()->andReturn('app-key');
+    $secret->shouldReceive('getName')->once()->andReturn('app-key');
 
     $volume = Volume::make()->fromSecret($secret);
 
@@ -53,7 +54,7 @@ it('sets volume source from secret', function () {
 
 it('sets volume source from config map', function () {
     $configMap = $this->mock(ConfigMap::class);
-    $configMap->shouldReceive('getName')->twice()->andReturn('app-config');
+    $configMap->shouldReceive('getName')->once()->andReturn('app-config');
 
     $volume = Volume::make()->fromConfigMap($configMap);
 
@@ -64,3 +65,10 @@ it('sets volume source from config map', function () {
         'name' => 'app-config-config-volume',
     ]);
 });
+
+it('refuses a volume from an unnamed secret or config map with a typed exception', function (Closure $call) {
+    expect($call)->toThrow(InvalidResourceException::class, 'A resource name is required');
+})->with([
+    'secret' => [fn () => Volume::make()->fromSecret(Secret::make())],
+    'config map' => [fn () => Volume::make()->fromConfigMap(ConfigMap::make())],
+]);

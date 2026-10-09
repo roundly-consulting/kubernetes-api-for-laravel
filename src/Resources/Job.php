@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\KubernetesApi\Resources;
 
 use Illuminate\Support\Carbon;
+use RoundlyConsulting\KubernetesApi\Exceptions\InvalidResourceException;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSelectors;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSpec;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasStatus;
@@ -33,11 +34,15 @@ class Job extends Resource
         return $this->getSpec('ttlSecondsAfterFinished');
     }
 
-    /** @return array<string, string> */
+    /**
+     * @return array<string, string>
+     *
+     * @throws InvalidResourceException when the job has no name
+     */
     public function podsSelectors(): array
     {
         return [
-            'job-name' => $this->getName(),
+            'job-name' => $this->getName() ?? throw InvalidResourceException::missingName(),
         ];
     }
 

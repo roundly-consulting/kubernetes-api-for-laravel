@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Resources;
 
+use RoundlyConsulting\KubernetesApi\Exceptions\InvalidResourceException;
 use RoundlyConsulting\KubernetesApi\Resources\Types\Port;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSelectors;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasSpec;
@@ -17,9 +18,14 @@ class Service extends Resource
 
     protected bool $usesNamespaces = true;
 
+    /**
+     * @throws InvalidResourceException when the service has no name
+     */
     public function getClusterDns(): string
     {
-        return "{$this->getName()}.{$this->getNamespace()}.svc.cluster.local";
+        $name = $this->getName() ?? throw InvalidResourceException::missingName();
+
+        return "{$name}.{$this->getNamespace()}.svc.cluster.local";
     }
 
     public function setType(string $type = 'ClusterIP'): static

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\Resources\Types;
 
+use RoundlyConsulting\KubernetesApi\Exceptions\InvalidResourceException;
 use RoundlyConsulting\KubernetesApi\Resources\ConfigMap;
 use RoundlyConsulting\KubernetesApi\Resources\Secret;
 
@@ -31,15 +32,25 @@ class Volume extends Type
             ->setAttribute('emptyDir', $options === [] ? new EmptyObject : $options);
     }
 
+    /**
+     * @throws InvalidResourceException when the secret has no name
+     */
     public function fromSecret(Secret $secret): static
     {
-        return $this->setAttribute('name', "{$secret->getName()}-secret-volume")
-            ->setAttribute('secret', ['secretName' => $secret->getName()]);
+        $name = $secret->getName() ?? throw InvalidResourceException::missingName();
+
+        return $this->setAttribute('name', "{$name}-secret-volume")
+            ->setAttribute('secret', ['secretName' => $name]);
     }
 
+    /**
+     * @throws InvalidResourceException when the config map has no name
+     */
     public function fromConfigMap(ConfigMap $configMap): static
     {
-        return $this->setAttribute('name', "{$configMap->getName()}-config-volume")
-            ->setAttribute('configMap', ['name' => $configMap->getName()]);
+        $name = $configMap->getName() ?? throw InvalidResourceException::missingName();
+
+        return $this->setAttribute('name', "{$name}-config-volume")
+            ->setAttribute('configMap', ['name' => $name]);
     }
 }

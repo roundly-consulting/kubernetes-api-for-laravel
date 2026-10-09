@@ -68,6 +68,9 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - `toArray()`, `toJson()` and `dump()` no longer write `kind` / `apiVersion` into the resource,
   so serialising a listed item no longer makes `isDirty()` report true. The output still
   carries both.
+- `getName()` now returns `?string` (null for an unnamed resource) instead of throwing a
+  `TypeError`. `Volume::fromSecret()` / `fromConfigMap()`, `Job::podsSelectors()` and
+  `Service::getClusterDns()` throw `InvalidResourceException` for an unnamed resource instead.
 
 ## 1.0.0 - 2026-10-03
 
