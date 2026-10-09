@@ -68,3 +68,26 @@ it('configures a cluster role binding', function () {
             ['kind' => 'Group', 'name' => 'admins', 'apiGroup' => 'rbac.authorization.k8s.io'],
         ]);
 });
+
+it('never gives a service account subject an api group', function () {
+    // The apiserver requires apiGroup "" for a ServiceAccount subject (422 otherwise);
+    // on a RoleBinding the namespace may be left out — it defaults to the binding's.
+    $binding = RoleBinding::make()
+        ->addSubject('ServiceAccount', 'builder')
+        ->addSubject('User', 'jane');
+
+    expect($binding->getSubjects())->toBe([
+        ['kind' => 'ServiceAccount', 'name' => 'builder'],
+        ['kind' => 'User', 'name' => 'jane', 'apiGroup' => 'rbac.authorization.k8s.io'],
+    ]);
+});
+
+it('requires a namespace for a cluster role binding service account subject', function () {
+    ClusterRoleBinding::make()->addSubject('ServiceAccount', 'builder');
+})->throws(InvalidArgumentException::class, "The ServiceAccount subject 'builder' needs a namespace on a ClusterRoleBinding.");
+
+it('keeps the api group on cluster role binding user and group subjects', function () {
+    expect(ClusterRoleBinding::make()->addSubject('User', 'jane')->getSubjects())->toBe([
+        ['kind' => 'User', 'name' => 'jane', 'apiGroup' => 'rbac.authorization.k8s.io'],
+    ]);
+});

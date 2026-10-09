@@ -18,6 +18,11 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - The dynamic `getX()` / `setX()` / `withX()` / `addToX()` / `removeX()` accessors now strip
   only the leading verb. `getTargetPort()` used to read `tarPort` and `setSubsets()` wrote
   `subs`, because every occurrence of the verb in the name was removed.
+- `RoleBinding::addSubject()` / `ClusterRoleBinding::addSubject()` no longer give a
+  `ServiceAccount` subject the rbac `apiGroup` when no namespace is passed (the apiserver
+  answered 422). Behaviour change: `ClusterRoleBinding::addSubject('ServiceAccount', …)`
+  without a namespace now throws `InvalidResourceException`, since a cluster-scoped binding
+  cannot default it.
 
 ## 1.0.0 - 2026-10-03
 

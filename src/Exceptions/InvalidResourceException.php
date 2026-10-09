@@ -11,6 +11,8 @@ use RoundlyConsulting\KubernetesApi\Resources\Resource;
  * Thrown by `Kubernetes::registerResource()` and the fake's `seed()` for a class that
  * is not a resource, or a name no cluster could ever answer — and before any request
  * whose name, namespace, plural or apiVersion cannot be a single URL path segment.
+ * Typed builders throw it too, for input that could only produce an object or a
+ * selector the apiserver rejects (or reads differently than intended).
  */
 class InvalidResourceException extends InvalidArgumentException
 {

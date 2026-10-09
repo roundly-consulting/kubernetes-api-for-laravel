@@ -27,12 +27,19 @@ class RoleBinding extends Resource
         return (array) $this->getAttribute('roleRef', []);
     }
 
+    /**
+     * A `User` / `Group` subject (rbac api group), or a `ServiceAccount` subject, which
+     * the apiserver requires to have no api group; its namespace defaults to the
+     * binding's own when left out.
+     */
     public function addSubject(string $kind, string $name, ?string $namespace = null): static
     {
         $subject = ['kind' => $kind, 'name' => $name];
 
-        if ($kind === 'ServiceAccount' && $namespace !== null) {
-            $subject['namespace'] = $namespace;
+        if ($kind === 'ServiceAccount') {
+            if ($namespace !== null) {
+                $subject['namespace'] = $namespace;
+            }
         } else {
             $subject['apiGroup'] = 'rbac.authorization.k8s.io';
         }
