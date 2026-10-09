@@ -15,6 +15,9 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   non-existent `spec.source.<type>`, so no PersistentVolume built with `setSource()` was
   valid and `getSource()` never read a real one. `setSource()` now replaces any other source,
   and `getSource()` without a name returns the source keyed by its type (`['csi' => [...]]`).
+- The dynamic `getX()` / `setX()` / `withX()` / `addToX()` / `removeX()` accessors now strip
+  only the leading verb. `getTargetPort()` used to read `tarPort` and `setSubsets()` wrote
+  `subs`, because every occurrence of the verb in the name was removed.
 
 ## 1.0.0 - 2026-10-03
 

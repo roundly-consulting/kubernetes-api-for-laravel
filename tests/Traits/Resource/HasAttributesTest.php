@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use RoundlyConsulting\KubernetesApi\Resources\Endpoints;
+use RoundlyConsulting\KubernetesApi\Resources\Types\Port;
+use RoundlyConsulting\KubernetesApi\Resources\Types\Type;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasAttributes;
 
 it('stores attributes', function () {
@@ -182,4 +185,18 @@ it('can use custom macros', function () {
     $instance::macro('something', fn () => 'Hi');
 
     expect($instance->something())->toBe('Hi');
+});
+
+it('strips only the leading verb from a magic accessor name', function () {
+    // `getTargetPort` used to read `tarPort`, `setSubsets` wrote `subs` and every `with`
+    // in a name was rewritten: the verb is only ever the prefix.
+    expect(Port::http(8080)->getTargetPort())->toBe(8080)
+        ->and(Endpoints::make()->setSubsets([['addresses' => []]])->toArray())
+        ->toHaveKey('subsets')
+        ->not->toHaveKey('subs')
+        ->and(Type::make()->withTargetPort(1)->getAttribute('targetPort'))->toBe(1)
+        ->and(Type::make()->withWithdrawalDelay(5)->getAttribute('withdrawalDelay'))->toBe(5)
+        ->and(Type::make(['unremovable' => 1])->removeUnremovable()->toArray())->toBe([])
+        ->and(Type::make()->addToAddToList('a')->getAttribute('addToList'))->toBe(['a'])
+        ->and(Type::make(['targetPort' => 1])->setTargetPort(2)->getOriginalTargetPort())->toBe(1);
 });

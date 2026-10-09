@@ -111,8 +111,9 @@ trait HasAttributes
     /** @param array<int, mixed> $parameters */
     public function __call(string $method, array $parameters): mixed
     {
-        $normalizeAttributeName = fn (string $replace): string => Str::camel(
-            str_replace($replace, '', $method)
+        // Only the leading verb goes: `getTargetPort` reads `targetPort`, not `tarPort`.
+        $normalizeAttributeName = fn (string $prefix): string => Str::camel(
+            substr($method, strlen($prefix))
         );
 
         if (Str::startsWith($method, 'set')) {
@@ -122,7 +123,7 @@ trait HasAttributes
         }
 
         if (Str::startsWith($method, 'with')) {
-            $method = str_replace('with', 'set', $method);
+            $method = 'set'.substr($method, strlen('with'));
 
             return $this->$method(...$parameters);
         }
