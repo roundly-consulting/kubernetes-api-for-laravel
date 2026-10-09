@@ -8,6 +8,10 @@ namespace RoundlyConsulting\KubernetesApi\DataTransferObjects;
  * A resolved kubeconfig context: the apiserver URL plus the credentials and
  * trust material needed to reach it. PEM data is materialised to temp files by
  * the loader, since the HTTP client expects file paths.
+ *
+ * `tokenFile` is a bearer-token file read again for every request (a rotated
+ * service-account token, a kubeconfig `tokenFile`); `token` is its content at load
+ * time, used while the file cannot be read.
  */
 final readonly class KubeConfig
 {
@@ -18,6 +22,7 @@ final readonly class KubeConfig
         public ?string $clientKeyPath = null,
         public ?string $certificateAuthorityPath = null,
         public bool $verify = true,
+        public ?string $tokenFile = null,
     ) {}
 
     public function hasClientCertificate(): bool

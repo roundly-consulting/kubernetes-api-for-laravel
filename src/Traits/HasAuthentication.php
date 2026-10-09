@@ -14,6 +14,8 @@ trait HasAuthentication
 {
     protected ?string $token = null;
 
+    protected ?string $tokenFile = null;
+
     protected ?string $pathToCertificate = null;
 
     protected ?string $pathToPrivateKey = null;
@@ -27,9 +29,27 @@ trait HasAuthentication
         return ! is_null($this->getToken());
     }
 
+    /**
+     * The bearer token: the token file's current content when one is set (read on
+     * every call, so a rotated token is picked up), otherwise — or while the file
+     * cannot be read — the token itself.
+     */
     public function getToken(): ?string
     {
+        if ($this->tokenFile !== null && is_file($this->tokenFile) && is_readable($this->tokenFile)) {
+            $token = trim((string) file_get_contents($this->tokenFile));
+
+            if ($token !== '') {
+                return $token;
+            }
+        }
+
         return $this->token;
+    }
+
+    public function getTokenFile(): ?string
+    {
+        return $this->tokenFile;
     }
 
     public function hasPathToCertificate(): bool
@@ -67,10 +87,27 @@ trait HasAuthentication
         return $this->verify;
     }
 
+    /**
+     * A fixed bearer token. It replaces a token file, so the token given is the one sent.
+     */
     public function withToken(#[SensitiveParameter] ?string $token): static
     {
         $clone = clone $this;
         $clone->token = $token;
+        $clone->tokenFile = null;
+
+        return $clone;
+    }
+
+    /**
+     * A bearer-token file, read again for every request — a projected service-account
+     * token the kubelet rotates, or a kubeconfig `tokenFile`. Any token already set stays
+     * as the fallback while the file cannot be read.
+     */
+    public function withTokenFile(?string $path): static
+    {
+        $clone = clone $this;
+        $clone->tokenFile = $path === '' ? null : $path;
 
         return $clone;
     }

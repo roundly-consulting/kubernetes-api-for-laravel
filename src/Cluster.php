@@ -74,6 +74,7 @@ final class Cluster
     {
         $cluster = $this->url($config->server)
             ->withToken($config->token)
+            ->withTokenFile($config->tokenFile)
             ->withCertificate($config->clientCertificatePath)
             ->withPrivateKey($config->clientKeyPath)
             ->withCaCertificate($config->certificateAuthorityPath);

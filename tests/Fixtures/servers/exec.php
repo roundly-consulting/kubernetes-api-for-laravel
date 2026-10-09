@@ -15,6 +15,7 @@ declare(strict_types=1);
  *  - big    one stdout message fragmented over a binary + a continuation frame
  *  - ping   a ping; stdout says whether the client answered with a pong
  *  - reject a 403 instead of the upgrade
+ *  - whoami stdout is the request's Authorization header
  */
 
 $cert = getenv('TLS_CERT');
@@ -107,6 +108,10 @@ while (true) {
             $reply = (string) fread($client, 64);
             $pong = strlen($reply) >= 2 && (ord($reply[0]) & 0x0F) === 0xA && (ord($reply[1]) & 0x80) === 0x80;
             fwrite($client, $frame("\x01".($pong ? 'pong-ok' : 'no-pong')).$status(0).$frame('', 8));
+            break;
+        case 'whoami':
+            preg_match('/^Authorization: ([^\r\n]*)/mi', $request, $authorization);
+            fwrite($client, $upgrade.$frame("\x01".($authorization[1] ?? 'none')).$status(0).$frame('', 8));
             break;
         case 'reject':
             fwrite($client, "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{\"message\":\"pods \\\"api\\\" is forbidden\"}");

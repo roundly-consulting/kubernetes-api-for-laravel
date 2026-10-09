@@ -134,8 +134,10 @@ final class ExecConnection
             'Sec-WebSocket-Protocol: '.self::SUBPROTOCOL,
         ];
 
-        if ($this->cluster->hasToken()) {
-            $headers[] = 'Authorization: Bearer '.$this->cluster->getToken();
+        $token = $this->cluster->getToken();
+
+        if ($token !== null) {
+            $headers[] = 'Authorization: Bearer '.$token;
         }
 
         fwrite($socket, implode("\r\n", $headers)."\r\n\r\n");

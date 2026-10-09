@@ -6,6 +6,12 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 
 ## Unreleased
 
+### Added
+
+- `Cluster::withTokenFile()` / `getTokenFile()` and `KubeConfig::$tokenFile`: a bearer-token
+  file read again for every request, so a rotated token is picked up. `withToken()` replaces
+  a token file.
+
 ### Fixed
 
 - `Volume::emptyDirectory()` without options now sends `emptyDir: {}`. It used to send the
@@ -36,6 +42,10 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   values against the Kubernetes label grammar and throw `InvalidResourceException` before
   any request. `whereLabelIn('tenant', ['acme,globex'])` used to widen a tenant filter to
   both tenants.
+- In-cluster clusters (`source: in-cluster`, `Kubernetes::inCluster()`) now re-read the
+  service-account token file for every HTTP request and exec. The token used to be read
+  once and kept for the life of the process, so long-running workers got 401s after the
+  kubelet rotated it.
 
 ## 1.0.0 - 2026-10-03
 

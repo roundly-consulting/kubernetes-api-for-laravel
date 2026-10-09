@@ -207,8 +207,11 @@ final class HttpTransport implements Transport
             $request->withoutVerifying();
         }
 
-        if ($cluster->hasToken()) {
-            $request->withToken((string) $cluster->getToken());
+        // Read once per request: a token file is re-read on every call.
+        $token = $cluster->getToken();
+
+        if ($token !== null) {
+            $request->withToken($token);
         }
 
         if ($cluster->hasPathToCertificate()) {

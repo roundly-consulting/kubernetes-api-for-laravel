@@ -53,11 +53,14 @@ final class InClusterConfigLoader
             $host = "[{$host}]";
         }
 
+        // The kubelet rotates the projected token, so the file is read again for every
+        // request; the token read here is only the fallback while it cannot be read.
         return new KubeConfig(
             server: "https://{$host}:{$port}",
             token: trim($token),
             certificateAuthorityPath: $this->caPath,
             verify: true,
+            tokenFile: $this->tokenPath,
         );
     }
 }
