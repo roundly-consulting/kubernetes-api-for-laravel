@@ -105,6 +105,8 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   whatever was sent, so a freshly built manifest wiped a seeded status.
 - `Kubernetes::fake()` now creates objects that carry `metadata.generateName` instead of
   answering 422, generating `<generateName><5 random characters>` like the apiserver.
+- `Kubernetes::fake()` now reads `limit(0)` as no limit, like the apiserver. It used to
+  page one item at a time.
 
 ## 1.0.0 - 2026-10-03
 

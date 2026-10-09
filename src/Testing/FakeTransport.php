@@ -222,7 +222,8 @@ final class FakeTransport implements Transport
         $items = $this->matching($partition, $api, $query);
 
         $offset = max(0, (int) ($query['continue'] ?? 0));
-        $limit = isset($query['limit']) ? max(1, (int) $query['limit']) : null;
+        // The apiserver pages only for a positive limit: 0 (or less) returns everything.
+        $limit = isset($query['limit']) && (int) $query['limit'] > 0 ? (int) $query['limit'] : null;
         $page = array_slice($items, $offset, $limit);
 
         $metadata = ['resourceVersion' => (string) $this->resourceVersion];

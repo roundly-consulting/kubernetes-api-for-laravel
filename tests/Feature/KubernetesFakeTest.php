@@ -247,6 +247,19 @@ it('paginates with limit and continue', function (): void {
         ->and($everything)->toHaveCount(5);
 });
 
+it('reads limit 0 as no limit, like the apiserver', function (): void {
+    Kubernetes::fake()->seed('configMaps', array_map(
+        fn (string $name): array => ['metadata' => ['name' => $name]],
+        ['a', 'b', 'c'],
+    ));
+
+    $page = Kubernetes::configMaps()->limit(0)->getPage();
+
+    expect($page->items)->toHaveCount(3)
+        ->and($page->continue)->toBeNull()
+        ->and($page->remainingItemCount)->toBeNull();
+});
+
 it('leaves the builder on its own page after lazy iteration', function (): void {
     // lazy() used to leave the last continue token on the builder: a second lazy()
     // or get() returned only the last page.
