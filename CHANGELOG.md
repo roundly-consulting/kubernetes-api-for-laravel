@@ -26,6 +26,11 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - `TraefikService::to()` now accepts `int|string` and sends a numeric port (`80` or `'80'`)
   as an integer. A quoted `"80"` was read by Traefik as a port name, which no service has,
   so the route never served. Named ports (`'http'`) are unchanged.
+- `TraefikRoute::hostRule()` and `pathRule()` now validate their input and throw
+  `InvalidResourceException` for anything that is not an RFC 1123 hostname, or a path
+  starting with `/` free of backticks and whitespace. A value such as
+  ``a.test`) || Host(`victim.test`` used to inject extra matchers into the rule. Raw rules
+  still go through `matchRule()`.
 
 ## 1.0.0 - 2026-10-03
 
