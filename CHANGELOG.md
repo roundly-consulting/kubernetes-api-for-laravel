@@ -80,6 +80,9 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - The volume names `Volume::fromSecret()` / `fromConfigMap()` derive are now valid DNS-1123
   labels: dots become hyphens and a name is cut to 63 characters. `app.example.com` gave
   `app.example.com-secret-volume`, which the apiserver answered with a 422.
+- Without an explicit path the kubeconfig loader now merges every file in `KUBECONFIG`, like
+  kubectl: missing files are skipped and the first file to set a value wins. Only the first
+  path used to be read, and a missing first file failed the load.
 
 ## 1.0.0 - 2026-10-03
 

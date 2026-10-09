@@ -11,27 +11,18 @@ use Symfony\Component\Yaml\Yaml;
 /**
  * Parses a kubeconfig file and resolves a named context into a {@see KubeConfig},
  * materialising any inline `*-data` PEM blocks to temp files so the HTTP client
- * can consume them as paths. Relative certificate paths are resolved against the
- * kubeconfig's own directory, as kubectl does.
+ * can consume them as paths. Relative certificate and token-file paths are resolved
+ * against the directory of the kubeconfig that defines them, as kubectl does.
+ *
+ * Without an explicit path every file in `KUBECONFIG` is merged the way kubectl merges
+ * them: missing files are skipped, the first file to set `current-context` wins, and so
+ * does the first file to define a cluster, user or context of a given name.
  */
 final class KubeConfigLoader
 {
     public function load(?string $path = null, ?string $context = null): KubeConfig
     {
-        $path ??= $this->defaultPath();
-
-        if (! is_file($path)) {
-            throw new KubeConfigException("Kubeconfig not found at {$path}.");
-        }
-
-        $contents = file_get_contents($path);
-
-        if ($contents === false) {
-            throw new KubeConfigException("Unable to read kubeconfig at {$path}.");
-        }
-
-        /** @var array<string, mixed> $config */
-        $config = (array) Yaml::parse($contents);
+        $config = $path !== null ? $this->readFile($path) : $this->readDefault();
 
         $contextName = $context ?? (is_string($config['current-context'] ?? null) ? $config['current-context'] : null);
 
@@ -63,18 +54,115 @@ final class KubeConfigLoader
         $this->guardSupportedAuthentication($user, $userName);
 
         $insecure = $this->insecureSkipTlsVerify($cluster, $clusterName);
-        $directory = $this->directoryOf($path);
-        $tokenFile = $this->resolveTokenFile($user, $directory);
+        $tokenFile = is_string($user['tokenFile'] ?? null) && $user['tokenFile'] !== '' ? $user['tokenFile'] : null;
 
         return new KubeConfig(
             server: $server,
             token: $this->resolveToken($user) ?? $this->readTokenFile($tokenFile, $userName),
-            clientCertificatePath: $this->resolvePem($user, 'client-certificate', 'client-certificate-data', 'crt', $directory),
-            clientKeyPath: $this->resolvePem($user, 'client-key', 'client-key-data', 'key', $directory),
-            certificateAuthorityPath: $this->resolvePem($cluster, 'certificate-authority', 'certificate-authority-data', 'ca', $directory),
+            clientCertificatePath: $this->resolvePem($user, 'client-certificate', 'client-certificate-data', 'crt'),
+            clientKeyPath: $this->resolvePem($user, 'client-key', 'client-key-data', 'key'),
+            certificateAuthorityPath: $this->resolvePem($cluster, 'certificate-authority', 'certificate-authority-data', 'ca'),
             verify: ! $insecure,
             tokenFile: $tokenFile,
         );
+    }
+
+    /**
+     * One kubeconfig file, its relative file references already resolved against its
+     * own directory (they must be, before files are merged).
+     *
+     * @return array<string, mixed>
+     */
+    private function readFile(string $path): array
+    {
+        if (! is_file($path)) {
+            throw new KubeConfigException("Kubeconfig not found at {$path}.");
+        }
+
+        $contents = file_get_contents($path);
+
+        if ($contents === false) {
+            throw new KubeConfigException("Unable to read kubeconfig at {$path}.");
+        }
+
+        /** @var array<string, mixed> $config */
+        $config = (array) Yaml::parse($contents);
+        $directory = $this->directoryOf($path);
+
+        foreach (['clusters' => ['cluster', ['certificate-authority']], 'users' => ['user', ['client-certificate', 'client-key', 'tokenFile']]] as $section => [$key, $references]) {
+            if (! is_array($config[$section] ?? null)) {
+                continue;
+            }
+
+            foreach ($config[$section] as $index => $entry) {
+                foreach ($references as $reference) {
+                    $file = is_array($entry) && is_array($entry[$key] ?? null) ? ($entry[$key][$reference] ?? null) : null;
+
+                    if (is_string($file) && $file !== '') {
+                        $config[$section][$index][$key][$reference] = $this->resolvePath($file, $directory);
+                    }
+                }
+            }
+        }
+
+        return $config;
+    }
+
+    /**
+     * Every existing file in `KUBECONFIG`, merged; `~/.kube/config` without it.
+     *
+     * @return array<string, mixed>
+     */
+    private function readDefault(): array
+    {
+        $env = getenv('KUBECONFIG');
+
+        if (! is_string($env) || $env === '') {
+            return $this->readFile(rtrim((string) (getenv('HOME') ?: ''), '/').'/.kube/config');
+        }
+
+        $paths = array_values(array_unique(array_filter(explode(PATH_SEPARATOR, $env), static fn (string $path): bool => $path !== '')));
+        $existing = array_values(array_filter($paths, is_file(...)));
+
+        if ($existing === []) {
+            throw new KubeConfigException('Kubeconfig not found at '.implode(', ', $paths).'.');
+        }
+
+        return $this->merge(array_map($this->readFile(...), $existing));
+    }
+
+    /**
+     * kubectl's merge: the first `current-context` set wins, and so does the first
+     * cluster, user or context of a given name.
+     *
+     * @param  list<array<string, mixed>>  $configs
+     * @return array<string, mixed>
+     */
+    private function merge(array $configs): array
+    {
+        $merged = ['clusters' => [], 'users' => [], 'contexts' => []];
+        $seen = [];
+
+        foreach ($configs as $config) {
+            $current = $config['current-context'] ?? null;
+
+            if (! isset($merged['current-context']) && is_string($current) && $current !== '') {
+                $merged['current-context'] = $current;
+            }
+
+            foreach (['clusters', 'users', 'contexts'] as $section) {
+                foreach ((array) ($config[$section] ?? []) as $entry) {
+                    $name = is_array($entry) ? ($entry['name'] ?? null) : null;
+
+                    if (is_string($name) && ! isset($seen[$section][$name])) {
+                        $seen[$section][$name] = true;
+                        $merged[$section][] = $entry;
+                    }
+                }
+            }
+        }
+
+        return $merged;
     }
 
     /**
@@ -98,18 +186,6 @@ final class KubeConfigLoader
                 "User '{$userName}' authenticates with {$unsupported}, which is not supported: use a token, a tokenFile or a client certificate.",
             );
         }
-    }
-
-    /**
-     * The user's `tokenFile`, relative to the kubeconfig's directory unless absolute.
-     *
-     * @param  array<string, mixed>  $user
-     */
-    private function resolveTokenFile(array $user, string $directory): ?string
-    {
-        $file = $user['tokenFile'] ?? null;
-
-        return is_string($file) && $file !== '' ? $this->resolvePath($file, $directory) : null;
     }
 
     /**
@@ -180,17 +256,6 @@ final class KubeConfigLoader
             || preg_match('#^[A-Za-z]:[\\\\/]#', $path) === 1;
     }
 
-    private function defaultPath(): string
-    {
-        $env = getenv('KUBECONFIG');
-
-        if (is_string($env) && $env !== '') {
-            return explode(PATH_SEPARATOR, $env)[0];
-        }
-
-        return rtrim((string) (getenv('HOME') ?: ''), '/').'/.kube/config';
-    }
-
     /**
      * @param  array<string, mixed>  $config
      * @return array<string, mixed>
@@ -235,19 +300,19 @@ final class KubeConfigLoader
     }
 
     /**
-     * Resolve a PEM either from a file reference (`*`, relative to the kubeconfig's
-     * directory unless absolute) or an inline base64 `*-data` block, writing inline
-     * data to a private temp file (one per distinct PEM, removed when the process
-     * exits) and returning its path.
+     * Resolve a PEM either from a file reference (`*`, already resolved against its
+     * kubeconfig's directory) or an inline base64 `*-data` block, writing inline data
+     * to a private temp file (one per distinct PEM, removed when the process exits)
+     * and returning its path.
      *
      * @param  array<string, mixed>  $source
      */
-    private function resolvePem(array $source, string $fileKey, string $dataKey, string $suffix, string $directory): ?string
+    private function resolvePem(array $source, string $fileKey, string $dataKey, string $suffix): ?string
     {
         $file = $source[$fileKey] ?? null;
 
         if (is_string($file) && $file !== '') {
-            return $this->resolvePath($file, $directory);
+            return $file;
         }
 
         $data = $source[$dataKey] ?? null;

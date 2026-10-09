@@ -17,8 +17,9 @@ return [
      * Named clusters, resolved lazily the first time they are used. `source` picks
      * where the connection comes from:
      *  - `url`        — the `url` and credential keys below;
-     *  - `kubeconfig` — a kubeconfig file (`kubeconfig`, null = KUBECONFIG or
-     *                   ~/.kube/config) and `context` (null = current-context);
+     *  - `kubeconfig` — a kubeconfig file (`kubeconfig`, null = every KUBECONFIG
+     *                   file merged like kubectl, or ~/.kube/config) and `context`
+     *                   (null = current-context);
      *  - `in-cluster` — the service account mounted into the pod.
      * `namespace` is the default for namespaced resources; `manager` is your app's
      * field manager, sent as `fieldManager` on every write (a server-side apply

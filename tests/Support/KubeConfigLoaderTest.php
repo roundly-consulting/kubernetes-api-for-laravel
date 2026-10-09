@@ -493,3 +493,93 @@ it('refuses a user whose credentials it cannot produce instead of going anonymou
     'auth provider' => ["auth-provider:\n  name: gcp", 'an auth provider'],
     'basic auth' => ["username: admin\npassword: secret", 'a username and password'],
 ]);
+
+function kubeConfigFile(string $dir, string $file, string $yaml): string
+{
+    if (! is_dir($dir)) {
+        mkdir($dir, 0777, true);
+    }
+
+    file_put_contents($dir.'/'.$file, $yaml);
+
+    return $dir.'/'.$file;
+}
+
+function kubeConfigEntries(string $context, string $server, ?string $current = null, string $ca = ''): string
+{
+    $currentLine = $current === null ? '' : "current-context: {$current}\n";
+    $caLine = $ca === '' ? '' : "\n      certificate-authority: {$ca}";
+
+    return <<<YAML
+        apiVersion: v1
+        {$currentLine}clusters:
+          - name: {$context}-cluster
+            cluster:
+              server: {$server}{$caLine}
+        users:
+          - name: {$context}-user
+            user:
+              token: {$context}-token
+        contexts:
+          - name: {$context}
+            context:
+              cluster: {$context}-cluster
+              user: {$context}-user
+        YAML;
+}
+
+it('merges every KUBECONFIG file, like kubectl', function () {
+    // Only the first KUBECONFIG path used to be read: a context in the second file was
+    // "not found", and a missing first file failed the whole load.
+    $dir = sys_get_temp_dir().'/kubecfg-merge-'.bin2hex(random_bytes(4));
+    $first = kubeConfigFile($dir.'/one', 'config', kubeConfigEntries('first', 'https://first:6443', current: 'second'));
+    $second = kubeConfigFile($dir.'/two', 'config', kubeConfigEntries('second', 'https://second:6443', current: 'first', ca: 'ca.crt'));
+
+    putenv('KUBECONFIG='.implode(PATH_SEPARATOR, [$dir.'/missing/config', $first, $second]));
+
+    try {
+        $current = (new KubeConfigLoader)->load();
+        $first = (new KubeConfigLoader)->load(context: 'first');
+
+        // The first file that sets current-context wins; relative paths resolve
+        // against the file that defined the entry.
+        expect($current->server)->toBe('https://second:6443')
+            ->and($current->token)->toBe('second-token')
+            ->and($current->certificateAuthorityPath)->toBe($dir.'/two/ca.crt')
+            ->and($first->server)->toBe('https://first:6443');
+    } finally {
+        putenv('KUBECONFIG');
+        @unlink($dir.'/one/config');
+        @unlink($dir.'/two/config');
+        @rmdir($dir.'/one');
+        @rmdir($dir.'/two');
+        @rmdir($dir);
+    }
+});
+
+it('lets the first KUBECONFIG file win when two define the same entry', function () {
+    $dir = sys_get_temp_dir().'/kubecfg-win-'.bin2hex(random_bytes(4));
+    $first = kubeConfigFile($dir, 'a', kubeConfigEntries('shared', 'https://from-a:6443', current: 'shared'));
+    $second = kubeConfigFile($dir, 'b', kubeConfigEntries('shared', 'https://from-b:6443'));
+
+    putenv('KUBECONFIG='.$first.PATH_SEPARATOR.$second);
+
+    try {
+        expect((new KubeConfigLoader)->load()->server)->toBe('https://from-a:6443');
+    } finally {
+        putenv('KUBECONFIG');
+        @unlink($first);
+        @unlink($second);
+        @rmdir($dir);
+    }
+});
+
+it('throws when no KUBECONFIG file exists', function () {
+    putenv('KUBECONFIG=/no/such/a'.PATH_SEPARATOR.'/no/such/b');
+
+    try {
+        (new KubeConfigLoader)->load();
+    } finally {
+        putenv('KUBECONFIG');
+    }
+})->throws(KubeConfigException::class, 'Kubeconfig not found at /no/such/a, /no/such/b.');
