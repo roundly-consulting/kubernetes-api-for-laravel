@@ -53,6 +53,11 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   to load with no credentials, so every request went out anonymous (401/403) with no hint why.
 - `lazy()` and `each()` no longer leave the last `continue` token on the builder. A second
   `lazy()` or a `get()` on the same builder used to return only the last page.
+- Resources returned by `get()`, `lazy()`, `find()`, `create()`, `update()`, `patch()`,
+  `delete()` and `watch()` now keep a generic `Resource`'s runtime kind, apiVersion,
+  `setPlural()` and `usingNamespaces()`. A listed generic resource (list items carry no
+  kind/apiVersion) could not be written back, and a namespaced one wrote to the
+  cluster-scoped path.
 
 ## 1.0.0 - 2026-10-03
 

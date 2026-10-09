@@ -369,13 +369,22 @@ trait ExecutesClusterOperations
     /**
      * A sibling instance for a server payload: same cluster, same default namespace
      * and — for a scoped resource — the same namespace pin, so nothing a scoped
-     * listing returns can be re-pointed outside the scope.
+     * listing returns can be re-pointed outside the scope. What a generic resource was
+     * told at runtime — kind, version, plural, namespacing — goes with it too: list
+     * items carry no kind or apiVersion, and plural and namespacing are no attributes.
+     * The payload's own kind and apiVersion still win.
      *
      * @param  array<string, mixed>  $attributes
      */
     public function newInstance(array $attributes = []): static
     {
-        $instance = (new static($attributes))
+        $instance = new static($attributes);
+        $instance->kind = $this->getKind();
+        $instance->version = $this->getVersion();
+        $instance->plural = $this->plural;
+        $instance->usesNamespaces = $this->usesNamespaces;
+
+        $instance
             ->setDefaultNamespace($this->defaultNamespace)
             ->setCluster($this->getCluster());
 

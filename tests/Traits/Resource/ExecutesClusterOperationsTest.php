@@ -9,6 +9,7 @@ use RoundlyConsulting\KubernetesApi\Exceptions\ClusterConfigurationException;
 use RoundlyConsulting\KubernetesApi\Exceptions\KubernetesException;
 use RoundlyConsulting\KubernetesApi\Http\HttpTransport;
 use RoundlyConsulting\KubernetesApi\Resources\Deployment;
+use RoundlyConsulting\KubernetesApi\Resources\Resource;
 use RoundlyConsulting\KubernetesApi\Resources\ResourcesCollection;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\ExecutesClusterOperations;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasCluster;
@@ -424,3 +425,36 @@ it('updates or creates rethrows non-404 errors from the existence check', functi
 
     $this->resource->setName('api-deployment')->updateOrCreate();
 })->throws(KubernetesException::class, 'Server Error');
+
+it('carries a generic resource\'s runtime kind, version, plural and namespacing into what it returns', function () {
+    // Built-in list items carry no kind/apiVersion, and plural/usesNamespaces are not
+    // attributes at all: without copying them a listed generic Lease could not be updated.
+    Http::fake([
+        '*/leases?*' => Http::response(['items' => [['metadata' => ['name' => 'l1', 'namespace' => 'ops', 'resourceVersion' => '7']]]]),
+        '*/leases/l1*' => Http::response(['apiVersion' => 'coordination.k8s.io/v1', 'kind' => 'Lease', 'metadata' => ['name' => 'l1', 'namespace' => 'ops']]),
+    ]);
+
+    $leases = Resource::make()
+        ->setKind('Lease')
+        ->setVersion('coordination.k8s.io/v1')
+        ->setPlural('leases')
+        ->usingNamespaces()
+        ->setNamespace('ops')
+        ->setCluster(Cluster::make()->url('https://localhost')->withToken('secret'));
+
+    $item = $leases->get()->first();
+
+    expect($item->getKind())->toBe('Lease')
+        ->and($item->getVersion())->toBe('coordination.k8s.io/v1')
+        ->and($item->getPluralKind())->toBe('leases')
+        ->and($item->usesNamespaces())->toBeTrue()
+        ->and($item->isDirty())->toBeFalse();
+
+    $updated = $item->update();
+
+    Http::assertSent(fn (Request $r): bool => $r->method() === 'PUT'
+        && str_starts_with($r->url(), 'https://localhost/apis/coordination.k8s.io/v1/namespaces/ops/leases/l1'));
+
+    expect($updated->getPluralKind())->toBe('leases')
+        ->and($updated->usesNamespaces())->toBeTrue();
+});
