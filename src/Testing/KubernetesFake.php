@@ -42,7 +42,9 @@ final class KubernetesFake extends KubernetesManager
     }
 
     /**
-     * Put objects on the fake cluster, as though they had been created there.
+     * Put objects on the fake cluster, as though they had been created there. A
+     * namespaced item without `metadata.namespace` lands in the target cluster's default
+     * namespace — where `create()` through that cluster would put it.
      *
      * @param  string  $resource  a resource class or a registered name (`'pods'`)
      * @param  list<array<string, mixed>|resource>  $items  manifests or resource objects
@@ -51,9 +53,14 @@ final class KubernetesFake extends KubernetesManager
     public function seed(string $resource, array $items, ?string $cluster = null): self
     {
         $class = $this->resourceClass($resource);
+        $target = $this->cluster($cluster);
 
         foreach ($items as $item) {
-            $object = $item instanceof Resource ? $item : new $class($item);
+            $object = $item instanceof Resource ? clone $item : $target->resource($class)->setAttributes($item);
+
+            if ($object->namespaceScope() === null) {
+                $object->setDefaultNamespace($target->defaultNamespace());
+            }
 
             $name = $object->getAttribute('metadata.name');
 

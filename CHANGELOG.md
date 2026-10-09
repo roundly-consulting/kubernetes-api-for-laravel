@@ -107,6 +107,11 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   answering 422, generating `<generateName><5 random characters>` like the apiserver.
 - `Kubernetes::fake()` now reads `limit(0)` as no limit, like the apiserver. It used to
   page one item at a time.
+- `Kubernetes::fake()->seed()` now puts a namespaced item without `metadata.namespace` in the
+  target cluster's default namespace, where `create()` through that cluster would put it. It
+  always used `default`, so a seed into a cluster with another default namespace was never
+  listed. The target cluster is resolved, so seeding into an unknown cluster name now throws
+  `ClusterNotFoundException`.
 
 ## 1.0.0 - 2026-10-03
 

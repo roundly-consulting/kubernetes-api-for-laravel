@@ -317,6 +317,21 @@ it('keeps every cluster in its own store', function (): void {
     expect(Kubernetes::deployments()->get())->toHaveCount(1);
 });
 
+it('seeds namespace-less items into the target cluster\'s default namespace', function (): void {
+    // seed() used to put them in `default` whatever the cluster, where create() through
+    // that cluster would never look.
+    Kubernetes::registerCluster('prod', fn (Cluster $cluster): Cluster => $cluster->withDefaultNamespace('shop'));
+
+    Kubernetes::fake()
+        ->seed('configMaps', [['metadata' => ['name' => 'a']], ConfigMap::make()->setName('b')], cluster: 'prod')
+        ->seed('configMaps', [['metadata' => ['name' => 'c', 'namespace' => 'ops']]], cluster: 'prod');
+
+    $listed = Kubernetes::cluster('prod')->configMaps()->get();
+
+    expect($listed->map(fn (ConfigMap $item): string => $item->getName().'@'.$item->getNamespace())->all())->toBe(['a@shop', 'b@shop'])
+        ->and(Kubernetes::cluster('prod')->configMaps()->setNamespace('ops')->get()->map(fn (ConfigMap $item): ?string => $item->getName())->all())->toBe(['c']);
+});
+
 it('serves ad-hoc clusters from the default store and never reads credentials', function (): void {
     Kubernetes::fake()->seed('nodes', [['metadata' => ['name' => 'node-1']]]);
 
