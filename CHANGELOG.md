@@ -13,6 +13,7 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   a token file.
 - Kubeconfig users with a `tokenFile` (relative to the kubeconfig's directory, like the
   certificate paths). The file is read again for every request.
+- `Container::setImage($image, null)` sets an image without a tag.
 
 ### Fixed
 
@@ -71,6 +72,9 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - `getName()` now returns `?string` (null for an unnamed resource) instead of throwing a
   `TypeError`. `Volume::fromSecret()` / `fromConfigMap()`, `Job::podsSelectors()` and
   `Service::getClusterDns()` throw `InvalidResourceException` for an unnamed resource instead.
+- `Container::setImage()` no longer appends `:latest` (or the given tag) to a reference that
+  already carries a tag or a digest. `nginx:1.27` became `nginx:1.27:latest` and a
+  digest-pinned image became invalid, which the kubelet failed with `InvalidImageName`.
 
 ## 1.0.0 - 2026-10-03
 

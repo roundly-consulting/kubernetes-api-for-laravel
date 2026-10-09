@@ -17,6 +17,23 @@ it('sets container image with tag', function () {
         ]);
 });
 
+it('keeps an image reference that already has a digest or a tag', function () {
+    // setImage() used to append `:latest` to everything: `nginx:1.27:latest` and a
+    // digest-pinned `…@sha256:…:latest` are both invalid image names.
+    $digest = 'nginx@sha256:'.str_repeat('a1', 32);
+
+    expect(Container::make()->setImage($digest)->getAttribute('image'))->toBe($digest)
+        ->and(Container::make()->setImage('nginx:1.27')->getAttribute('image'))->toBe('nginx:1.27')
+        ->and(Container::make()->setImage('registry.local:5000/app:2.0')->getAttribute('image'))->toBe('registry.local:5000/app:2.0')
+        ->and(Container::make()->setImage('registry.local:5000/app')->getAttribute('image'))->toBe('registry.local:5000/app:latest')
+        ->and(Container::make()->setImage('nginx')->getAttribute('image'))->toBe('nginx:latest')
+        ->and(Container::make()->setImage('nginx', '1.27')->getAttribute('image'))->toBe('nginx:1.27');
+});
+
+it('sets an image without a tag when the tag is null', function () {
+    expect(Container::make()->setImage('nginx', null)->getAttribute('image'))->toBe('nginx');
+});
+
 it('adds port to container', function () {
     $container = Container::make();
 

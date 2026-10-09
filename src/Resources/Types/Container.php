@@ -6,9 +6,17 @@ namespace RoundlyConsulting\KubernetesApi\Resources\Types;
 
 class Container extends Type
 {
-    public function setImage(string $image, string $tag = 'latest'): static
+    /**
+     * The image, tagged `$tag`. A reference that already carries a tag (`nginx:1.27`) or
+     * a digest (`nginx@sha256:…`) is used as given — appending a tag would make it an
+     * invalid image name — and a null tag leaves an untagged image untagged.
+     */
+    public function setImage(string $image, ?string $tag = 'latest'): static
     {
-        return $this->setAttribute('image', $image.':'.$tag);
+        $repository = substr($image, (int) strrpos($image, '/'));
+        $pinned = str_contains($image, '@') || str_contains($repository, ':');
+
+        return $this->setAttribute('image', $pinned || $tag === null ? $image : "{$image}:{$tag}");
     }
 
     public function addPort(int $containerPort, string $protocol = 'TCP', ?string $name = null): static
