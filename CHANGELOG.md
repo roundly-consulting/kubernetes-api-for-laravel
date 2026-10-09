@@ -6,6 +6,8 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 
 ## Unreleased
 
+## 1.1.0 - 2026-10-09
+
 ### Added
 
 - `Cluster::withTokenFile()` / `getTokenFile()` and `KubeConfig::$tokenFile`: a bearer-token
@@ -27,12 +29,18 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   `env('KUBERNETES_NAMESPACE')`), so the order is the cluster's `namespace`, then the
   context's, then `default`. A published config still carrying `'default'` keeps the old
   behaviour.
+- Documentation: the README hero image uses an absolute URL, so it renders on Packagist and other
+  sites.
+- Maintenance: `composer.json` `homepage` and `support.docs` link to the package documentation.
 
 ### Removed
 
 - `PersistentVolume::setSelectors()`, `addSelector()` and `getSelectors()`. A PersistentVolume
   has no `spec.selector` (the claim has one), so they only wrote a field the apiserver drops
-  (or refuses under strict field validation).
+  (or refuses under strict field validation). Removing public methods is breaking; it ships in
+  this minor release because the methods never produced a valid request. To upgrade, drop the
+  calls: a selector belongs on the claim (`PersistentVolumeClaim::setSelectors()` /
+  `addSelector()`).
 
 ### Fixed
 
