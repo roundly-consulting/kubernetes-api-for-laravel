@@ -616,3 +616,31 @@ it('carries the context namespace', function () {
         @unlink($path);
     }
 });
+
+it('reads ~/.kube/config when KUBECONFIG is not set', function () {
+    $home = sys_get_temp_dir().'/kubecfg-home-'.bin2hex(random_bytes(4));
+    kubeConfigFile($home.'/.kube', 'config', kubeConfigEntries('home', 'https://home:6443', current: 'home'));
+    $previous = getenv('HOME');
+
+    putenv('KUBECONFIG');
+    putenv("HOME={$home}");
+
+    try {
+        expect((new KubeConfigLoader)->load()->server)->toBe('https://home:6443');
+    } finally {
+        putenv($previous === false ? 'HOME' : "HOME={$previous}");
+        @unlink($home.'/.kube/config');
+        @rmdir($home.'/.kube');
+        @rmdir($home);
+    }
+});
+
+it('reads a kubeconfig whose sections are empty', function () {
+    $path = writeKubeConfig("apiVersion: v1\ncurrent-context: a\nclusters:\nusers:\ncontexts:\n");
+
+    try {
+        (new KubeConfigLoader)->load($path);
+    } finally {
+        @unlink($path);
+    }
+})->throws(KubeConfigException::class, "No 'a' entry found under 'contexts'");
