@@ -43,7 +43,7 @@ it('adds service', function () {
             [
                 'kind' => 'Service',
                 'name' => 'my-api',
-                'port' => '8000',
+                'port' => 8000,
             ],
         ],
     ]);
@@ -64,7 +64,7 @@ it('returns services', function () {
         ->toBe([
             'kind' => 'Service',
             'name' => 'my-api',
-            'port' => '8000',
+            'port' => 8000,
         ]);
 });
 

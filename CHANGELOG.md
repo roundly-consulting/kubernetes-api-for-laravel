@@ -23,6 +23,9 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   answered 422). Behaviour change: `ClusterRoleBinding::addSubject('ServiceAccount', …)`
   without a namespace now throws `InvalidResourceException`, since a cluster-scoped binding
   cannot default it.
+- `TraefikService::to()` now accepts `int|string` and sends a numeric port (`80` or `'80'`)
+  as an integer. A quoted `"80"` was read by Traefik as a port name, which no service has,
+  so the route never served. Named ports (`'http'`) are unchanged.
 
 ## 1.0.0 - 2026-10-03
 
