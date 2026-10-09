@@ -14,6 +14,8 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - Kubeconfig users with a `tokenFile` (relative to the kubeconfig's directory, like the
   certificate paths). The file is read again for every request.
 - `Container::setImage($image, null)` sets an image without a tag.
+- `Volume::fromSecret()` / `fromConfigMap()` take an optional volume name as their second
+  argument.
 
 ### Fixed
 
@@ -75,6 +77,9 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - `Container::setImage()` no longer appends `:latest` (or the given tag) to a reference that
   already carries a tag or a digest. `nginx:1.27` became `nginx:1.27:latest` and a
   digest-pinned image became invalid, which the kubelet failed with `InvalidImageName`.
+- The volume names `Volume::fromSecret()` / `fromConfigMap()` derive are now valid DNS-1123
+  labels: dots become hyphens and a name is cut to 63 characters. `app.example.com` gave
+  `app.example.com-secret-volume`, which the apiserver answered with a 422.
 
 ## 1.0.0 - 2026-10-03
 

@@ -33,24 +33,41 @@ class Volume extends Type
     }
 
     /**
+     * A volume backed by the secret, named `$volumeName` or `<secret>-secret-volume`.
+     *
      * @throws InvalidResourceException when the secret has no name
      */
-    public function fromSecret(Secret $secret): static
+    public function fromSecret(Secret $secret, ?string $volumeName = null): static
     {
         $name = $secret->getName() ?? throw InvalidResourceException::missingName();
 
-        return $this->setAttribute('name', "{$name}-secret-volume")
+        return $this->setAttribute('name', $volumeName ?? self::derivedName($name, '-secret-volume'))
             ->setAttribute('secret', ['secretName' => $name]);
     }
 
     /**
+     * A volume backed by the config map, named `$volumeName` or `<map>-config-volume`.
+     *
      * @throws InvalidResourceException when the config map has no name
      */
-    public function fromConfigMap(ConfigMap $configMap): static
+    public function fromConfigMap(ConfigMap $configMap, ?string $volumeName = null): static
     {
         $name = $configMap->getName() ?? throw InvalidResourceException::missingName();
 
-        return $this->setAttribute('name', "{$name}-config-volume")
+        return $this->setAttribute('name', $volumeName ?? self::derivedName($name, '-config-volume'))
             ->setAttribute('configMap', ['name' => $name]);
+    }
+
+    /**
+     * A pod volume name must be a DNS-1123 label (no dots, at most 63 characters),
+     * while a secret or config map name is a DNS subdomain (dots, up to 253). Dots
+     * become hyphens and a name too long is cut — two long names that share their
+     * start would then collide, so pass an explicit volume name for those.
+     */
+    private static function derivedName(string $name, string $suffix): string
+    {
+        $base = trim((string) preg_replace('/[^a-z0-9-]+/', '-', strtolower($name)), '-');
+
+        return rtrim(substr($base, 0, 63 - strlen($suffix)), '-').$suffix;
     }
 }
