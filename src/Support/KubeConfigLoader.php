@@ -60,17 +60,74 @@ final class KubeConfigLoader
             throw new KubeConfigException("Cluster '{$clusterName}' has no server URL.");
         }
 
+        $this->guardSupportedAuthentication($user, $userName);
+
         $insecure = $this->insecureSkipTlsVerify($cluster, $clusterName);
         $directory = $this->directoryOf($path);
+        $tokenFile = $this->resolveTokenFile($user, $directory);
 
         return new KubeConfig(
             server: $server,
-            token: $this->resolveToken($user),
+            token: $this->resolveToken($user) ?? $this->readTokenFile($tokenFile, $userName),
             clientCertificatePath: $this->resolvePem($user, 'client-certificate', 'client-certificate-data', 'crt', $directory),
             clientKeyPath: $this->resolvePem($user, 'client-key', 'client-key-data', 'key', $directory),
             certificateAuthorityPath: $this->resolvePem($cluster, 'certificate-authority', 'certificate-authority-data', 'ca', $directory),
             verify: ! $insecure,
+            tokenFile: $tokenFile,
         );
+    }
+
+    /**
+     * A user authenticating any way other than a token, a token file or a client
+     * certificate would otherwise load with no credentials, and every request would go
+     * out anonymous (401/403) with no hint why — so it throws, naming the method.
+     *
+     * @param  array<string, mixed>  $user
+     */
+    private function guardSupportedAuthentication(array $user, string $userName): void
+    {
+        $unsupported = match (true) {
+            ! empty($user['exec']) => 'an exec credential plugin',
+            ! empty($user['auth-provider']) => 'an auth provider',
+            ! empty($user['username']) || ! empty($user['password']) => 'a username and password',
+            default => null,
+        };
+
+        if ($unsupported !== null) {
+            throw new KubeConfigException(
+                "User '{$userName}' authenticates with {$unsupported}, which is not supported: use a token, a tokenFile or a client certificate.",
+            );
+        }
+    }
+
+    /**
+     * The user's `tokenFile`, relative to the kubeconfig's directory unless absolute.
+     *
+     * @param  array<string, mixed>  $user
+     */
+    private function resolveTokenFile(array $user, string $directory): ?string
+    {
+        $file = $user['tokenFile'] ?? null;
+
+        return is_string($file) && $file !== '' ? $this->resolvePath($file, $directory) : null;
+    }
+
+    /**
+     * The token file's content at load time; requests read it again (a rotated token).
+     */
+    private function readTokenFile(?string $tokenFile, string $userName): ?string
+    {
+        if ($tokenFile === null) {
+            return null;
+        }
+
+        $token = is_file($tokenFile) && is_readable($tokenFile) ? file_get_contents($tokenFile) : false;
+
+        if ($token === false || trim($token) === '') {
+            throw new KubeConfigException("User '{$userName}' has a tokenFile that cannot be read: {$tokenFile}.");
+        }
+
+        return trim($token);
     }
 
     /**
@@ -161,6 +218,23 @@ final class KubeConfigLoader
     }
 
     /**
+     * A file reference from the kubeconfig: as given when absolute, otherwise relative
+     * to the kubeconfig's directory (kubectl semantics, not the CWD).
+     */
+    private function resolvePath(string $file, string $directory): string
+    {
+        if ($this->isAbsolute($file)) {
+            return $file;
+        }
+
+        while (str_starts_with($file, './')) {
+            $file = substr($file, 2);
+        }
+
+        return rtrim($directory, '/\\').'/'.$file;
+    }
+
+    /**
      * Resolve a PEM either from a file reference (`*`, relative to the kubeconfig's
      * directory unless absolute) or an inline base64 `*-data` block, writing inline
      * data to a private temp file (one per distinct PEM, removed when the process
@@ -173,15 +247,7 @@ final class KubeConfigLoader
         $file = $source[$fileKey] ?? null;
 
         if (is_string($file) && $file !== '') {
-            if ($this->isAbsolute($file)) {
-                return $file;
-            }
-
-            while (str_starts_with($file, './')) {
-                $file = substr($file, 2);
-            }
-
-            return rtrim($directory, '/\\').'/'.$file;
+            return $this->resolvePath($file, $directory);
         }
 
         $data = $source[$dataKey] ?? null;

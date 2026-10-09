@@ -11,6 +11,8 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - `Cluster::withTokenFile()` / `getTokenFile()` and `KubeConfig::$tokenFile`: a bearer-token
   file read again for every request, so a rotated token is picked up. `withToken()` replaces
   a token file.
+- Kubeconfig users with a `tokenFile` (relative to the kubeconfig's directory, like the
+  certificate paths). The file is read again for every request.
 
 ### Fixed
 
@@ -46,6 +48,9 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   service-account token file for every HTTP request and exec. The token used to be read
   once and kept for the life of the process, so long-running workers got 401s after the
   kubelet rotated it.
+- Kubeconfig users that authenticate with an `exec` plugin, an `auth-provider` or a
+  username/password now throw `KubeConfigException` naming the user and the method. They used
+  to load with no credentials, so every request went out anonymous (401/403) with no hint why.
 
 ## 1.0.0 - 2026-10-03
 

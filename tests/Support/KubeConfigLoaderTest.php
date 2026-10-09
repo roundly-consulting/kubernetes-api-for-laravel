@@ -410,3 +410,86 @@ it('refuses an unreadable insecure-skip-tls-verify instead of guessing (strict c
     'number' => ['2'],
     'list' => ['[true]'],
 ]);
+
+function kubeConfigWithUser(string $user): string
+{
+    $user = preg_replace('/^/m', '      ', trim($user));
+
+    return writeKubeConfig(<<<YAML
+        apiVersion: v1
+        current-context: a
+        clusters:
+          - name: c
+            cluster:
+              server: https://x
+        users:
+          - name: eks-admin
+            user:
+        {$user}
+        contexts:
+          - name: a
+            context:
+              cluster: c
+              user: eks-admin
+        YAML);
+}
+
+it('reads a tokenFile user and keeps the file for re-reading', function () {
+    $dir = sys_get_temp_dir().'/kubecfg-tf-'.bin2hex(random_bytes(4));
+    mkdir($dir, 0777, true);
+    file_put_contents($dir.'/token', "file-token\n");
+    file_put_contents($dir.'/config', <<<'YAML'
+        apiVersion: v1
+        current-context: a
+        clusters:
+          - name: c
+            cluster:
+              server: https://x
+        users:
+          - name: u
+            user:
+              tokenFile: ./token
+        contexts:
+          - name: a
+            context:
+              cluster: c
+              user: u
+        YAML);
+
+    try {
+        $config = (new KubeConfigLoader)->load($dir.'/config');
+
+        // Relative to the kubeconfig's directory, like the certificate paths.
+        expect($config->token)->toBe('file-token')
+            ->and($config->tokenFile)->toBe($dir.'/token');
+    } finally {
+        @unlink($dir.'/token');
+        @unlink($dir.'/config');
+        @rmdir($dir);
+    }
+});
+
+it('throws when a tokenFile cannot be read', function () {
+    $path = kubeConfigWithUser('tokenFile: /no/such/token');
+
+    try {
+        (new KubeConfigLoader)->load($path);
+    } finally {
+        @unlink($path);
+    }
+})->throws(KubeConfigException::class, "User 'eks-admin' has a tokenFile that cannot be read: /no/such/token.");
+
+it('refuses a user whose credentials it cannot produce instead of going anonymous', function (string $user, string $method) {
+    $path = kubeConfigWithUser($user);
+
+    try {
+        expect(fn () => (new KubeConfigLoader)->load($path))
+            ->toThrow(KubeConfigException::class, "User 'eks-admin' authenticates with {$method}, which is not supported");
+    } finally {
+        @unlink($path);
+    }
+})->with([
+    'exec plugin' => ["exec:\n  apiVersion: client.authentication.k8s.io/v1beta1\n  command: aws", 'an exec credential plugin'],
+    'auth provider' => ["auth-provider:\n  name: gcp", 'an auth provider'],
+    'basic auth' => ["username: admin\npassword: secret", 'a username and password'],
+]);
