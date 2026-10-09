@@ -126,6 +126,19 @@ it('refuses a create without a name', function (): void {
     Kubernetes::configMaps()->create();
 })->throws(KubernetesException::class, 'name or generateName is required');
 
+it('generates a name from metadata.generateName, as the apiserver does', function (): void {
+    Kubernetes::fake();
+
+    $created = Kubernetes::configMaps()->setAttribute('metadata.generateName', 'job-')->create();
+    $name = $created->getName();
+
+    expect($created->wasRecentlyCreated())->toBeTrue()
+        ->and($name)->toMatch('/^job-[a-z0-9]{5}$/')
+        ->and($created->getAttribute('metadata.generateName'))->toBe('job-')
+        ->and(Kubernetes::configMaps()->setName((string) $name)->find()->getName())->toBe($name)
+        ->and(Kubernetes::configMaps()->setAttribute('metadata.generateName', 'job-')->create()->getName())->not->toBe($name);
+});
+
 it('refuses a stale update with a 409 conflict', function (): void {
     Kubernetes::fake()->seed(Deployment::class, [web()]);
 

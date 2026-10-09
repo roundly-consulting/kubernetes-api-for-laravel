@@ -103,6 +103,8 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - `Kubernetes::fake()`: `update()`, `updateOrCreate()` and `patch()` now keep the stored
   `status`, as the apiserver does on the main resource. The fake used to replace it with
   whatever was sent, so a freshly built manifest wiped a seeded status.
+- `Kubernetes::fake()` now creates objects that carry `metadata.generateName` instead of
+  answering 422, generating `<generateName><5 random characters>` like the apiserver.
 
 ## 1.0.0 - 2026-10-03
 

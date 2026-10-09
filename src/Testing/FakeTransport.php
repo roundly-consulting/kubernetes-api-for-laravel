@@ -279,6 +279,17 @@ final class FakeTransport implements Transport
     private function create(string $partition, ApiPath $api, array $body, bool $dryRun): Response
     {
         $name = $body['metadata']['name'] ?? null;
+        $generateName = $body['metadata']['generateName'] ?? null;
+
+        // Like the apiserver: no name but a `generateName` gets `<base><5 random>`, the
+        // base cut to 58 characters so the name stays within 63.
+        if ((! is_string($name) || $name === '') && is_string($generateName) && $generateName !== '') {
+            do {
+                $name = substr($generateName, 0, 58).Str::lower(Str::random(5));
+            } while (isset($this->objects[$partition][$this->key((string) $api->apiVersion, (string) $api->plural, $api->namespace, $name)]));
+
+            $body['metadata']['name'] = $name;
+        }
 
         if (! is_string($name) || $name === '') {
             return $this->status(422, 'Invalid', "{$api->label()} is invalid: metadata.name: Required value: name or generateName is required");
