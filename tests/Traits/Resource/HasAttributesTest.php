@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\Http;
+use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\Resources\Endpoints;
+use RoundlyConsulting\KubernetesApi\Resources\Pod;
 use RoundlyConsulting\KubernetesApi\Resources\Types\Port;
 use RoundlyConsulting\KubernetesApi\Resources\Types\Type;
 use RoundlyConsulting\KubernetesApi\Traits\Resource\HasAttributes;
@@ -199,4 +202,23 @@ it('strips only the leading verb from a magic accessor name', function () {
         ->and(Type::make(['unremovable' => 1])->removeUnremovable()->toArray())->toBe([])
         ->and(Type::make()->addToAddToList('a')->getAttribute('addToList'))->toBe(['a'])
         ->and(Type::make(['targetPort' => 1])->setTargetPort(2)->getOriginalTargetPort())->toBe(1);
+});
+
+it('serialises a resource without making it dirty', function () {
+    // toArray() used to write kind and apiVersion into the resource itself, so a list
+    // item (which carries neither) turned dirty from merely being serialised.
+    Http::preventStrayRequests();
+    Http::fake(['*' => Http::response(['items' => [['metadata' => ['name' => 'web', 'namespace' => 'default']]]])]);
+
+    $pod = Pod::make()->setCluster(Cluster::make()->url('https://localhost'))->get()->first();
+
+    expect($pod->isDirty())->toBeFalse();
+
+    $array = $pod->toArray();
+    $pod->toJson();
+
+    expect($pod->isDirty())->toBeFalse()
+        ->and($array['kind'])->toBe('Pod')
+        ->and($array['apiVersion'])->toBe('v1')
+        ->and($pod->getAttribute('kind'))->toBeNull();
 });

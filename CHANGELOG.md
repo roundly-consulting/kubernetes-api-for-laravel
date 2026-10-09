@@ -65,6 +65,9 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - `ConfigMap::setData([])` and `Secret::setData([])` now remove `data`, and `setLabels([])` /
   `setAnnotations([])` (and removing the last label or annotation) send `{}`. All four used to
   send the JSON list `[]`, which the apiserver answered with a 400.
+- `toArray()`, `toJson()` and `dump()` no longer write `kind` / `apiVersion` into the resource,
+  so serialising a listed item no longer makes `isDirty()` report true. The output still
+  carries both.
 
 ## 1.0.0 - 2026-10-03
 

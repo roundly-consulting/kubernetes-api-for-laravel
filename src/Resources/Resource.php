@@ -60,14 +60,19 @@ class Resource implements Arrayable, Jsonable
         dd($this->toArray());
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * The manifest, always with `kind` and `apiVersion` — filled in on the copy, so
+     * serialising never changes the resource (or makes it dirty).
+     *
+     * @return array<string, mixed>
+     */
     public function toArray(): array
     {
-        // Force kind and version to be filled to correctly resolve API endpoint
-        $this->setKind($this->getKind());
-        $this->setVersion($this->getVersion());
+        $attributes = $this->attributes;
+        $attributes['kind'] = $this->getKind();
+        $attributes['apiVersion'] = $this->getVersion();
 
-        return collect($this->attributes)
+        return collect($attributes)
             ->sortKeys()
             ->all();
     }
