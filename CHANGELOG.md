@@ -6,6 +6,16 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 
 ## Unreleased
 
+## 1.2.1 - 2026-10-10
+
+### Changed
+
+- A YAML syntax error in a kubeconfig now throws `KubeConfigException` (the documented type,
+  `Kubeconfig at <path> is not valid YAML (line N).`) instead of Symfony's `ParseException`; both
+  extend `RuntimeException`. Code that caught `ParseException` while loading a kubeconfig
+  (`Kubernetes::fromKubeConfig()` or a cluster with the `kubeconfig` source) should catch
+  `KubeConfigException`.
+
 ### Security
 
 - A wrong-typed cluster `token` (`kubernetes.clusters.<name>.token` set to a number, an array or
@@ -17,9 +27,8 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   `KubeConfigLoader` parameter carrying part of the kubeconfig (a user entry with its `token`,
   `client-key-data`, password, `exec` env or `auth-provider` config; a cluster entry with its
   `proxy-url`), and the decoded PEM written to a temp file, is now `#[SensitiveParameter]`. A YAML
-  syntax error now throws `KubeConfigException` (`Kubeconfig at <path> is not valid YAML (line
-  N).`) instead of Symfony's `ParseException`, whose message quoted the offending line and whose
-  frames carried the whole file. Which kubeconfigs load is unchanged.
+  syntax error no longer surfaces Symfony's `ParseException`, whose message quoted the offending
+  line and whose frames carried the whole file (see Changed). Which kubeconfigs load is unchanged.
 
 ## 1.2.0 - 2026-10-10
 
