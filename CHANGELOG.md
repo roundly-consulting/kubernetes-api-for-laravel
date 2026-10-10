@@ -6,6 +6,8 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 
 ## Unreleased
 
+## 1.2.0 - 2026-10-10
+
 ### Added
 
 - `Cluster::withRedirects()`, `withoutRedirects()` and `followsRedirects()`, plus the
