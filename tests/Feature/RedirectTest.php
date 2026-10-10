@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use RoundlyConsulting\KubernetesApi\Cluster;
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubeConfig;
@@ -201,7 +203,14 @@ it('describes a redirect without a usable Location', function (array $headers, s
     'a relative Location' => [['Location' => '/elsewhere?x=1'], 'HTTP 301 to https://k8s.example'],
     'a scheme-relative Location' => [['Location' => '//other.example:6443/x'], 'HTTP 301 to https://other.example:6443'],
     'an unparseable Location' => [['Location' => 'http://[bad'], 'HTTP 301 to an unparseable location'],
+    'a host no DNS name has' => [['Location' => 'https://bad_host.example/'], 'HTTP 301 to an unparseable location'],
 ]);
+
+it('names no origin for a relative Location without a base', function (): void {
+    $response = new Response(Factory::response('', 302, ['Location' => '/elsewhere'])->wait());
+
+    expect(KubernetesException::redirectNotFollowed($response)->getMessage())->toContain('HTTP 302 to an unparseable location');
+});
 
 it('reports false from ping on a 3xx', function (): void {
     Http::fake(['*' => Http::response('', 302, ['Location' => 'https://elsewhere.example/'])]);

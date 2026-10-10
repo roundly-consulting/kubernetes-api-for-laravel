@@ -188,6 +188,13 @@ describe('exec', function (): void {
             });
     });
 
+    it('says so when the answer is not HTTP at all', function (): void {
+        expect(fn () => ($this->pod)()->exec(['garbage']))
+            ->toThrow(function (WebSocketException $e): void {
+                expect($e->getMessage())->toBe('WebSocket upgrade failed: no valid HTTP response');
+            });
+    });
+
     it('keeps the apiserver Status message of a refused upgrade', function (): void {
         expect(fn () => ($this->pod)()->exec(['reject']))
             ->toThrow(WebSocketException::class, 'WebSocket upgrade failed: HTTP/1.1 403 Forbidden: pods "api" is forbidden');

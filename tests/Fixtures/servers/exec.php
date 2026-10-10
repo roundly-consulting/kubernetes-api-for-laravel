@@ -19,6 +19,7 @@ declare(strict_types=1);
  *  - redirect a 302 to another origin instead of the upgrade
  *  - echo   a 502 whose HTML body echoes the request's Authorization header, as a broken
  *           proxy does
+ *  - garbage something that is not HTTP at all
  */
 
 $cert = getenv('TLS_CERT');
@@ -122,6 +123,9 @@ while (true) {
         case 'echo':
             preg_match('/^Authorization: ([^\r\n]*)/mi', $request, $authorization);
             fwrite($client, "HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/html\r\n\r\n<html>Authorization: ".($authorization[1] ?? 'none').'</html>');
+            break;
+        case 'garbage':
+            fwrite($client, "SSH-2.0-OpenSSH_9.6\r\n\r\n");
             break;
         case 'reject':
             fwrite($client, "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{\"message\":\"pods \\\"api\\\" is forbidden\"}");
