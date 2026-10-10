@@ -85,6 +85,8 @@ use RoundlyConsulting\KubernetesApi\Testing\RecordedRequest;
  * @method static void assertNothingDeleted()
  * @method static void assertExecuted(string $pod, ?list<string> $command = null)
  * @method static void assertNothingExecuted()
+ * @method static void assertTokenRequested(string $serviceAccount, ?string $namespace = null, ?int $expirationSeconds = null)
+ * @method static void assertNoTokenRequested()
  *
  * @see KubernetesManager
  */

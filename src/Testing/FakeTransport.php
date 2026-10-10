@@ -28,7 +28,10 @@ use RoundlyConsulting\KubernetesApi\Http\Transport;
  * as JSON merge patches (lists are replaced, not merged by key), `update()` and
  * `patch()` keep the stored `status` for every kind (as the apiserver does for kinds
  * with a status subresource), deletes are immediate, and exec/logs answer for any pod —
- * seeded or not.
+ * seeded or not. A TokenRequest (`POST …/serviceaccounts/{name}/token`) answers only for a
+ * seeded service account (404 otherwise), with a deterministic
+ * `fake-token-{namespace}.{name}.{n}` that expires `expirationSeconds` (default 3600)
+ * from now.
  */
 final class FakeTransport implements Transport
 {
@@ -49,6 +52,8 @@ final class FakeTransport implements Transport
     private bool $unreachable = false;
 
     private int $resourceVersion = 0;
+
+    private int $tokens = 0;
 
     /**
      * @param  Closure(): string  $defaultPartition  the default cluster's name, where ad-hoc clusters live
@@ -100,7 +105,9 @@ final class FakeTransport implements Transport
             RequestVerb::Watch => $this->watch($partition, $api, $query),
             RequestVerb::Get => $this->get($partition, $api),
             RequestVerb::Logs => $this->logs($partition, $api, $query),
-            RequestVerb::Create => $this->create($partition, $api, $decoded, $request->isDryRun()),
+            RequestVerb::Create => $api->subresource === 'token'
+                ? $this->tokenRequest($partition, $api, $decoded, $request->isDryRun())
+                : $this->create($partition, $api, $decoded, $request->isDryRun()),
             RequestVerb::Update => $this->update($partition, $api, $decoded, $request->isDryRun()),
             RequestVerb::Patch => $this->patch($partition, $api, $decoded, $contentType, $query, $request->isDryRun()),
             RequestVerb::Delete => $this->delete($partition, $api, $request->isDryRun()),
@@ -193,7 +200,12 @@ final class FakeTransport implements Transport
                 $api->subresource === 'log' => RequestVerb::Logs,
                 default => RequestVerb::Get,
             },
-            'POST' => $api->name === null ? RequestVerb::Create : RequestVerb::Unknown,
+            'POST' => match (true) {
+                $api->name === null => RequestVerb::Create,
+                // A TokenRequest is a create on the service account's `token` subresource.
+                $api->plural === 'serviceaccounts' && $api->subresource === 'token' => RequestVerb::Create,
+                default => RequestVerb::Unknown,
+            },
             'PUT' => $api->name === null ? RequestVerb::Unknown : RequestVerb::Update,
             'PATCH' => $api->name === null ? RequestVerb::Unknown : RequestVerb::Patch,
             'DELETE' => $api->name === null ? RequestVerb::Unknown : RequestVerb::Delete,
@@ -314,6 +326,49 @@ final class FakeTransport implements Transport
         }
 
         return $this->json($object, 201);
+    }
+
+    /**
+     * A TokenRequest for a stored service account: the requested lifetime (default an
+     * hour) and audiences (default the in-cluster apiserver's) echoed back, and a token
+     * that is unique per request. A dry run mints nothing, as on the apiserver.
+     *
+     * @param  array<array-key, mixed>  $body
+     */
+    private function tokenRequest(string $partition, ApiPath $api, array $body, bool $dryRun): Response
+    {
+        if ($this->find($partition, $api) === null) {
+            return $this->notFound($api);
+        }
+
+        $spec = is_array($body['spec'] ?? null) ? $body['spec'] : [];
+        $seconds = is_int($spec['expirationSeconds'] ?? null) ? $spec['expirationSeconds'] : 3600;
+        $audiences = is_array($spec['audiences'] ?? null) && $spec['audiences'] !== []
+            ? array_values($spec['audiences'])
+            : ['https://kubernetes.default.svc.cluster.local'];
+
+        $status = $dryRun
+            ? ['token' => '', 'expirationTimestamp' => null]
+            : [
+                'token' => sprintf('fake-token-%s.%s.%d', $api->namespace, $api->name, ++$this->tokens),
+                'expirationTimestamp' => Date::now()->addSeconds($seconds)->toIso8601ZuluString(),
+            ];
+
+        return $this->json([
+            'apiVersion' => 'authentication.k8s.io/v1',
+            'kind' => 'TokenRequest',
+            'metadata' => [
+                'name' => $api->name,
+                'namespace' => $api->namespace,
+                'creationTimestamp' => Date::now()->toIso8601ZuluString(),
+            ],
+            'spec' => array_filter([
+                'audiences' => $audiences,
+                'expirationSeconds' => $seconds,
+                'boundObjectRef' => $spec['boundObjectRef'] ?? null,
+            ], static fn (mixed $value): bool => $value !== null),
+            'status' => $status,
+        ], 201);
     }
 
     /** @param array<array-key, mixed> $body */

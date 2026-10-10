@@ -20,6 +20,20 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   config key (`KUBERNETES_REDACT_ERRORS`, default off, read strictly): `KubernetesException`
   messages carry status and reason only (`HTTP 409 AlreadyExists`), not even the Status
   `message`. `apiMessage()`, `details()` and `$e->response` still read the body.
+- `ServiceAccount::requestToken($expirationSeconds, $audiences, $boundTo)`: mint a short-lived
+  service-account token through the TokenRequest API, as `kubectl create token` does. Only the
+  fields given are sent. It returns a `ServiceAccountToken`: `token`, `expiresAt` (UTC),
+  `audiences`, `boundObjectRef` and `isExpired()`; `var_dump()`, `print_r()` and `dump()` mask
+  the token. Input the apiserver would refuse throws `InvalidResourceException` before any
+  request: under 600 seconds, an unnamed service account, a dry run, or a binding to anything
+  but an existing Pod, Secret or Node. Failures are always body-free (`HTTP 403 Forbidden`),
+  whatever the cluster's redaction, and an answer without a token throws
+  `KubernetesException::malformedResponse()`.
+- `Kubernetes::fake()` answers TokenRequests: a deterministic `fake-token-{namespace}.{name}.{n}`
+  for a seeded service account, and a 404 for any other. New assertions:
+  `assertTokenRequested($serviceAccount, $namespace, $expirationSeconds)` and
+  `assertNoTokenRequested()`. A token request is a create on the `token` subresource, so
+  `assertCreated('serviceAccounts')` sees it too.
 
 ### Changed
 

@@ -67,6 +67,15 @@ class KubernetesException extends RequestException
     }
 
     /**
+     * A success status whose body is not what the call needs (a TokenRequest answer
+     * without a token, say). Body-free: the body may hold half a credential.
+     */
+    public static function malformedResponse(Response $response, string $what): self
+    {
+        return new self($response, sprintf('Malformed %s response from the Kubernetes API (HTTP %d).', $what, $response->status()));
+    }
+
+    /**
      * The HTTP status the apiserver answered with.
      */
     public function status(): int

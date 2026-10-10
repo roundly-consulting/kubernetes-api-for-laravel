@@ -13,6 +13,7 @@ use RoundlyConsulting\KubernetesApi\DataTransferObjects\VersionInfo;
 use RoundlyConsulting\KubernetesApi\Exceptions\InvalidResourceException;
 use RoundlyConsulting\KubernetesApi\KubernetesManager;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
+use RoundlyConsulting\KubernetesApi\Resources\ServiceAccount;
 use RoundlyConsulting\KubernetesApi\Support\ResourceRegistry;
 
 /**
@@ -22,7 +23,8 @@ use RoundlyConsulting\KubernetesApi\Support\ResourceRegistry;
  * every resource bound to one sends its requests here instead of the network. Objects
  * you `seed()` can be listed, found, updated, patched, scaled and deleted; creates
  * persist; a missing object is a real 404 and a stale `resourceVersion` a real 409.
- * Cluster definitions still run (so their names, namespaces and manager names apply),
+ * `requestToken()` mints a deterministic token for a seeded service account and is a
+ * 404 for any other. Cluster definitions still run (so their names, namespaces and manager names apply),
  * but `fromKubeConfig()` / `inCluster()` never read credentials.
  */
 final class KubernetesFake extends KubernetesManager
@@ -151,6 +153,9 @@ final class KubernetesFake extends KubernetesManager
     }
 
     /**
+     * Any POST that creates — `create()`, and `requestToken()` on a service account (a
+     * create on its `token` subresource).
+     *
      * @param  string  $resource  a resource class or a registered name
      * @param  string|(Closure(RecordedRequest): bool)|null  $constraint  the object name, or a closure
      */
@@ -251,6 +256,29 @@ final class KubernetesFake extends KubernetesManager
         $this->assertNoVerb(RequestVerb::Exec, 'executed');
     }
 
+    /**
+     * A token was requested for the service account (`requestToken()`) — in that
+     * namespace and for that lifetime, when given. Dry runs never count.
+     */
+    public function assertTokenRequested(string $serviceAccount, ?string $namespace = null, ?int $expirationSeconds = null): void
+    {
+        $matches = $this->tokenRequests(static fn (RecordedRequest $request): bool => $request->name === $serviceAccount
+            && ($namespace === null || $request->namespace === $namespace)
+            && ($expirationSeconds === null || $request->input('spec.expirationSeconds') === $expirationSeconds));
+
+        $account = $namespace === null ? $serviceAccount : "{$namespace}/{$serviceAccount}";
+        $lifetime = $expirationSeconds === null ? '' : " for {$expirationSeconds} seconds";
+
+        Assert::assertNotEmpty($matches, "Expected a token to be requested{$lifetime} for service account '{$account}', but none was.");
+    }
+
+    public function assertNoTokenRequested(): void
+    {
+        $requested = $this->tokenRequests();
+
+        Assert::assertSame([], $requested, 'Expected no service-account token request, but '.count($requested).' were sent.');
+    }
+
     protected function loadKubeConfig(?string $path, ?string $context): KubeConfig
     {
         return new KubeConfig(server: '');
@@ -302,6 +330,24 @@ final class KubernetesFake extends KubernetesManager
     {
         return $this->recorded(static fn (RecordedRequest $request): bool => $request->verb === $verb
             && ! $request->isDryRun()
+            && ($filter === null || $filter($request)));
+    }
+
+    /**
+     * Real (non-dry-run) TokenRequests, optionally filtered.
+     *
+     * @param  (Closure(RecordedRequest): bool)|null  $filter
+     * @return list<RecordedRequest>
+     */
+    private function tokenRequests(?Closure $filter = null): array
+    {
+        $account = new ServiceAccount;
+        $apiVersion = $account->getVersion();
+        $plural = $account->getPluralKind();
+
+        return $this->mutations(RequestVerb::Create, static fn (RecordedRequest $request): bool => $request->apiVersion === $apiVersion
+            && $request->plural === $plural
+            && $request->subresource === 'token'
             && ($filter === null || $filter($request)));
     }
 
