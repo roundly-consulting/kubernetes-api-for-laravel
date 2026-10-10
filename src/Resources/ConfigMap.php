@@ -18,7 +18,8 @@ class ConfigMap extends Resource
     {
         $data = (array) $this->getAttribute('data', []);
 
-        if (! $key) {
+        // Only null means the whole map: "0" is a valid key.
+        if ($key === null) {
             return $data;
         }
 

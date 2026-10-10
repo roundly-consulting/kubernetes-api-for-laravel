@@ -88,3 +88,13 @@ it('drops the data map when set to an empty one, instead of sending a json list'
         ->and($cm->toArray())->not->toHaveKey('data')
         ->and($cm->getData())->toBe([]);
 });
+
+it('reads the data key "0" as that entry, and only a null key as the whole map', function () {
+    $cm = ConfigMap::make(JsonPayload::decode('{"data":{"0":"a","1":"b"}}'));
+
+    expect($cm->getData('0'))->toBe('a')
+        ->and($cm->getData('1'))->toBe('b')
+        ->and($cm->getData('2', 'fallback'))->toBe('fallback')
+        ->and($cm->getData())->toBe(['0' => 'a', '1' => 'b'])
+        ->and($cm->getData(null))->toBe(['0' => 'a', '1' => 'b']);
+});

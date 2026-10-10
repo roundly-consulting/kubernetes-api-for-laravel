@@ -28,7 +28,8 @@ class Secret extends Resource
             $data[(string) $dataKey] = $decoded === false ? $value : $decoded;
         }
 
-        if (! $key) {
+        // Only null means the whole map: "0" is a valid key.
+        if ($key === null) {
             return $data;
         }
 

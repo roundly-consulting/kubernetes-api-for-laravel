@@ -6,6 +6,12 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- `ConfigMap::getData('0')` and `Secret::getData('0')` now return the `"0"` entry. They returned
+  the whole map, because `'0'` was read as "no key". Only a null (or omitted) key returns the
+  whole map.
+
 ## 1.1.0 - 2026-10-09
 
 ### Added

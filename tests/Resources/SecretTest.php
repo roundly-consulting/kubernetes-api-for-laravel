@@ -133,3 +133,13 @@ it('drops the data map when set to an empty one, instead of sending a json list'
         ->and($secret->toArray())->not->toHaveKey('data')
         ->and($secret->getData())->toBe([]);
 });
+
+it('reads the data key "0" as that entry, and only a null key as the whole map', function () {
+    $secret = Secret::make(JsonPayload::decode('{"data":{"0":"YQ==","1":"Yg=="}}'));
+
+    expect($secret->getData('0'))->toBe('a')
+        ->and($secret->getData('1'))->toBe('b')
+        ->and($secret->getData('2', 'fallback'))->toBe('fallback')
+        ->and($secret->getData())->toBe(['0' => 'a', '1' => 'b'])
+        ->and($secret->getData(null))->toBe(['0' => 'a', '1' => 'b']);
+});
