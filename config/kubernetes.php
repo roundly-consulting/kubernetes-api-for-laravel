@@ -37,7 +37,7 @@ return [
      * A setting that is not set — unset, null or blank (`KUBERNETES_TOKEN=`) — takes its
      * default (no token, `url`, `default` …); a set one must be a string, so a
      * non-string value throws a ClusterConfigurationException naming the key, as does
-     * an unknown `source`.
+     * an unknown `source`. A wrong-typed `token` is named by its type only, never its value.
      */
     'clusters' => [
         'default' => [

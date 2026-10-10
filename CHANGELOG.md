@@ -6,6 +6,14 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 
 ## Unreleased
 
+### Security
+
+- A wrong-typed cluster `token` (`kubernetes.clusters.<name>.token` set to a number, an array or
+  an object) no longer shows in the `ClusterConfigurationException` message: it is read through
+  package-toolkit's secret reader (now `^1.3`) and named by its type only (`[int] given.`). The
+  cluster definition and every cluster setting value are now `#[SensitiveParameter]`, so no stack
+  frame carries the token when a cluster fails to resolve, whichever setting is at fault.
+
 ## 1.2.0 - 2026-10-10
 
 ### Added

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\KubernetesApi\DataTransferObjects;
 
+use SensitiveParameter;
+
 /**
  * A resolved kubeconfig context: the apiserver URL plus the credentials and
  * trust material needed to reach it. PEM data is materialised to temp files by
@@ -18,6 +20,7 @@ final readonly class KubeConfig
 {
     public function __construct(
         public string $server,
+        #[SensitiveParameter]
         public ?string $token = null,
         public ?string $clientCertificatePath = null,
         public ?string $clientKeyPath = null,

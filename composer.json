@@ -25,7 +25,7 @@
         "illuminate/contracts": "^12.0|^13.0",
         "roundly-consulting/enums-for-laravel": "^1.0",
         "roundly-consulting/http-client-rate-limits-for-laravel": "^1.0",
-        "roundly-consulting/package-toolkit-for-laravel": "^1.0",
+        "roundly-consulting/package-toolkit-for-laravel": "^1.3",
         "symfony/yaml": "^7.0|^8.0"
     },
     "require-dev": {

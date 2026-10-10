@@ -6,6 +6,7 @@ namespace RoundlyConsulting\KubernetesApi\Exceptions;
 
 use RoundlyConsulting\KubernetesApi\Cluster;
 use RuntimeException;
+use SensitiveParameter;
 
 /**
  * A cluster that cannot be used as defined: no URL to send to, a definition closure
@@ -21,7 +22,7 @@ class ClusterConfigurationException extends RuntimeException
         return new self("No cluster URL configured for {$name}.");
     }
 
-    public static function invalidDefinition(string $cluster, mixed $returned): self
+    public static function invalidDefinition(string $cluster, #[SensitiveParameter] mixed $returned): self
     {
         return new self(sprintf(
             "The definition of cluster '%s' must return a %s, got %s. Return the configured cluster from the closure.",
@@ -38,9 +39,10 @@ class ClusterConfigurationException extends RuntimeException
 
     /**
      * A present config value of the wrong shape, worded like package-toolkit's
-     * strict readers: `Configuration value [key] must be …, [given] given.`
+     * strict readers: `Configuration value [key] must be …, [given] given.` The message is
+     * the one place the value shows, never a frame's arguments.
      */
-    public static function invalidSetting(string $key, string $expectation, mixed $value): self
+    public static function invalidSetting(string $key, string $expectation, #[SensitiveParameter] mixed $value): self
     {
         $given = match (true) {
             $value === '' => "''",

@@ -23,6 +23,7 @@ use RoundlyConsulting\KubernetesApi\Support\InClusterConfigLoader;
 use RoundlyConsulting\KubernetesApi\Support\KubeConfigLoader;
 use RoundlyConsulting\KubernetesApi\Support\ResourceRegistry;
 use RoundlyConsulting\PackageToolkit\Support\Config;
+use SensitiveParameter;
 
 /**
  * The root of the `Kubernetes` facade: owns the named clusters (from
@@ -283,23 +284,25 @@ class KubernetesManager
     }
 
     /**
+     * `$definition` carries the cluster's bearer token, so it never rides along in a frame.
+     *
      * @param  array<string, mixed>  $definition
      */
-    private function clusterFromConfig(string $name, array $definition): Cluster
+    private function clusterFromConfig(string $name, #[SensitiveParameter] array $definition): Cluster
     {
         $source = ConfigValue::isSet($definition['source'] ?? null) ? $definition['source'] : 'url';
 
         // A setting that is not set — absent, null or blank (a host's `KUBERNETES_TOKEN=`)
         // — takes its default; a set one must be a string. A wrong-typed value throws,
         // naming the key, instead of being quietly dropped.
-        $string = static fn (string $leaf, mixed $value): ?string => ConfigValue::isSet($value)
+        $string = static fn (string $leaf, #[SensitiveParameter] mixed $value): ?string => ConfigValue::isSet($value)
             ? self::requiredString("kubernetes.clusters.{$name}.{$leaf}", $value)
             : null;
 
         $connection = match ($source) {
             'url' => new KubeConfig(
                 server: $string('url', $definition['url'] ?? null) ?? '',
-                token: $string('token', $definition['token'] ?? null),
+                token: self::secret("kubernetes.clusters.{$name}.token", $definition['token'] ?? null),
                 clientCertificatePath: $string('certificate', $definition['certificate'] ?? null),
                 clientKeyPath: $string('private_key', $definition['private_key'] ?? null),
                 certificateAuthorityPath: $string('ca_certificate', $definition['ca_certificate'] ?? null),
@@ -339,9 +342,20 @@ class KubernetesManager
      * A present string setting: a non-empty string, or a ClusterConfigurationException
      * naming the key.
      */
-    private static function requiredString(string $key, mixed $value): string
+    private static function requiredString(string $key, #[SensitiveParameter] mixed $value): string
     {
         return Config::for([$key => $value], ClusterConfigurationException::class)->requireString($key);
+    }
+
+    /**
+     * A secret setting (a cluster's bearer token), accepted exactly like a string one:
+     * not set (absent, null or blank) is null, a present string is returned as given.
+     * Anything else throws a ClusterConfigurationException naming the key and the
+     * value's TYPE only (`[int] given.`), so a misconfigured token reaches no message.
+     */
+    private static function secret(string $key, #[SensitiveParameter] mixed $value): ?string
+    {
+        return Config::for([$key => $value], ClusterConfigurationException::class)->secret($key);
     }
 
     /**
@@ -350,7 +364,7 @@ class KubernetesManager
      * `KUBERNETES_VERIFY_SSL` as false and turned TLS verification off without a
      * word; anything but a boolean spelling now throws, naming the cluster's key.
      */
-    private static function flag(string $cluster, string $leaf, mixed $value, bool $default): bool
+    private static function flag(string $cluster, string $leaf, #[SensitiveParameter] mixed $value, bool $default): bool
     {
         $key = "kubernetes.clusters.{$cluster}.{$leaf}";
 
