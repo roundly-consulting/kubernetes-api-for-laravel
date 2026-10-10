@@ -56,5 +56,11 @@ it('mints a service-account token that authenticates against the apiserver', fun
 
     ServiceAccount::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('minted')->delete();
 
+    // Deletion is asynchronous on a busy apiserver: wait for it, as the other integration tests do.
+    retry(20, function (): void {
+        $gone = ServiceAccount::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('minted')->missingOnCluster();
+        throw_unless($gone, new RuntimeException('service account still present'));
+    }, 250);
+
     expect(ServiceAccount::make()->setCluster($this->cluster)->setNamespace($this->ns)->setName('minted')->existsOnCluster())->toBeFalse();
 });
