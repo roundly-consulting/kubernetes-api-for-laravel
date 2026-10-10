@@ -97,4 +97,18 @@ class CronJob extends Resource
 
         return is_string($time) ? Carbon::parse($time) : null;
     }
+
+    /**
+     * The job template is copied as a plain array, so the job's string-keyed maps (and
+     * its pod template's) are listed under `spec.jobTemplate` to stay JSON objects.
+     *
+     * @return list<string>
+     */
+    protected function objectAttributes(): array
+    {
+        return [
+            ...parent::objectAttributes(),
+            ...array_map(static fn (string $path): string => 'spec.jobTemplate.'.$path, Job::make()->objectAttributes()),
+        ];
+    }
 }

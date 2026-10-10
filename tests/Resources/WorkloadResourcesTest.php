@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 use RoundlyConsulting\KubernetesApi\Resources\CronJob;
 use RoundlyConsulting\KubernetesApi\Resources\DaemonSet;
+use RoundlyConsulting\KubernetesApi\Resources\Deployment;
 use RoundlyConsulting\KubernetesApi\Resources\Ingress;
 use RoundlyConsulting\KubernetesApi\Resources\Job;
+use RoundlyConsulting\KubernetesApi\Resources\Pod;
 use RoundlyConsulting\KubernetesApi\Resources\ReplicaSet;
 use RoundlyConsulting\KubernetesApi\Resources\ReplicationController;
 use RoundlyConsulting\KubernetesApi\Resources\Resource;
 use RoundlyConsulting\KubernetesApi\Resources\StatefulSet;
 use RoundlyConsulting\KubernetesApi\Resources\Types\EmptyObject;
 use RoundlyConsulting\KubernetesApi\Resources\Types\PersistentVolumeClaimTemplate;
+use RoundlyConsulting\KubernetesApi\Support\JsonPayload;
 
 it('configures a replica set', function () {
     expect(ReplicaSet::class)->toUse(Resource::class);
@@ -176,4 +179,26 @@ it('keeps only the JobTemplateSpec fields in a cron job template', function () {
         'metadata' => ['labels' => ['app' => 'cleanup']],
         'spec' => ['backoffLimit' => 2],
     ]);
+});
+
+it('sends numeric-string label and annotation keys inside a pod template as objects', function () {
+    // PHP turns the keys "0", "1" into a list, which encodes as `["a"]` and gets a 400 for a
+    // `map[string]string` — one level down in the template just like at the top.
+    $pod = Pod::make()->setLabels(['0' => 'a'])->setAnnotations(['0' => 'b']);
+
+    foreach ([Deployment::make(), StatefulSet::make(), DaemonSet::make(), ReplicaSet::make(), ReplicationController::make(), Job::make()] as $workload) {
+        expect($workload->setName('w')->setTemplate($pod)->toJson())
+            ->toContain('"template":{"metadata":{"labels":{"0":"a"},"annotations":{"0":"b"}}}');
+    }
+
+    $decoded = Deployment::make(JsonPayload::decode('{"metadata":{"name":"w"},"spec":{"template":{"metadata":{"labels":{"0":"a","1":"b"}}}}}'));
+
+    expect($decoded->toJson())->toContain('"template":{"metadata":{"labels":{"0":"a","1":"b"}}}');
+});
+
+it('sends numeric-string label keys inside a cron job template and its pod template as objects', function () {
+    $job = Job::make()->setLabels(['0' => 'j'])->setTemplate(Pod::make()->setLabels(['0' => 'p']));
+
+    expect(CronJob::make()->setName('c')->setJobTemplate($job)->toJson())
+        ->toContain('"jobTemplate":{"metadata":{"labels":{"0":"j"}},"spec":{"template":{"metadata":{"labels":{"0":"p"}}}}}');
 });

@@ -26,4 +26,19 @@ trait HasTemplate
 
         return Pod::make($template);
     }
+
+    /**
+     * The template is copied as a plain array, so the pod's own string-keyed maps
+     * (labels, annotations) are listed under `spec.template` too: one level down they
+     * would otherwise lose their object-ness like at the top.
+     *
+     * @return list<string>
+     */
+    protected function objectAttributes(): array
+    {
+        return [
+            ...parent::objectAttributes(),
+            ...array_map(static fn (string $path): string => 'spec.template.'.$path, Pod::make()->objectAttributes()),
+        ];
+    }
 }

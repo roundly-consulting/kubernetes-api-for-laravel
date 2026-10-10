@@ -11,6 +11,11 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 - `ConfigMap::getData('0')` and `Secret::getData('0')` now return the `"0"` entry. They returned
   the whole map, because `'0'` was read as "no key". Only a null (or omitted) key returns the
   whole map.
+- `metadata.labels` / `annotations` inside a pod template (`setTemplate()` on Deployment,
+  StatefulSet, DaemonSet, ReplicaSet, ReplicationController and Job) and inside a CronJob's
+  `setJobTemplate()` (plus its pod template) now always encode as JSON objects. Numeric-string
+  keys (`"0"`) turned them into a JSON list there, and the apiserver answered 400; 1.1.0 fixed
+  this for top-level maps only.
 
 ## 1.1.0 - 2026-10-09
 
