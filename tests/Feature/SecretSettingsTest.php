@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-use Illuminate\Contracts\Container\Container;
-use PHPUnit\Framework\Test;
 use RoundlyConsulting\KubernetesApi\Exceptions\ClusterConfigurationException;
 use RoundlyConsulting\KubernetesApi\Facades\Kubernetes;
 use RoundlyConsulting\KubernetesApi\KubernetesManager;
@@ -29,49 +27,6 @@ afterEach(function (): void {
     ini_set('zend.exception_ignore_args', (string) $this->ignoreArgs);
 });
 
-/**
- * Whether `$needle` occurs anywhere inside `$value`: a string, a scalar's export, an
- * array's keys and items, an object's properties (private ones included). PHP's own
- * redaction wrapper is opaque, and so is the test harness — the test case and the
- * container hold the config the test wrote, by design.
- *
- * @param  array<int, true>  $seen
- */
-function k8sHolds(mixed $value, string $needle, array &$seen = []): bool
-{
-    if ($value instanceof SensitiveParameterValue || $value instanceof Test || $value instanceof Container) {
-        return false;
-    }
-
-    if (is_string($value) || is_int($value) || is_float($value)) {
-        return str_contains(is_string($value) ? $value : var_export($value, true), $needle);
-    }
-
-    if (is_object($value)) {
-        if (isset($seen[spl_object_id($value)])) {
-            return false;
-        }
-
-        $seen[spl_object_id($value)] = true;
-
-        if ($value instanceof Stringable && str_contains((string) $value, $needle)) {
-            return true;
-        }
-
-        $value = (array) $value;
-    }
-
-    if (is_array($value)) {
-        foreach ($value as $key => $item) {
-            if (str_contains((string) $key, $needle) || k8sHolds($item, $needle, $seen)) {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
 function k8sFailure(): Throwable
 {
     try {
@@ -92,30 +47,8 @@ function k8sExpectNoLeak(Throwable $e, string $secret): void
     );
 
     expect($e->getTrace())->not->toBeEmpty()
-        ->and($managerFrames)->not->toBeEmpty();
-
-    // Every place the secret shows, so a red run lists them all at once.
-    $leaks = [];
-
-    for ($depth = 0, $current = $e; $current !== null; $depth++, $current = $current->getPrevious()) {
-        $exception = sprintf('%s%s', $depth === 0 ? '' : "previous #{$depth} ", $current::class);
-
-        if (str_contains($current->getMessage(), $secret)) {
-            $leaks[] = "{$exception}: message";
-        }
-
-        if (str_contains($current->getTraceAsString(), $secret)) {
-            $leaks[] = "{$exception}: getTraceAsString()";
-        }
-
-        foreach ($current->getTrace() as $i => $frame) {
-            if (k8sHolds($frame['args'] ?? [], $secret)) {
-                $leaks[] = sprintf('%s: frame #%d %s%s%s() args', $exception, $i, $frame['class'] ?? '', $frame['type'] ?? '', $frame['function']);
-            }
-        }
-    }
-
-    expect($leaks)->toBe([]);
+        ->and($managerFrames)->not->toBeEmpty()
+        ->and(k8sLeaks($e, ['token' => $secret]))->toBe([]);
 }
 
 /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\KubernetesApi\Support;
 
 use RoundlyConsulting\KubernetesApi\Exceptions\KubeConfigException;
+use SensitiveParameter;
 
 /**
  * @internal The temp files inline kubeconfig `*-data` PEMs (client private keys
@@ -27,7 +28,7 @@ final class TemporaryPemFiles
      *
      * @throws KubeConfigException
      */
-    public static function for(string $contents, string $suffix): string
+    public static function for(#[SensitiveParameter] string $contents, string $suffix): string
     {
         $key = "{$suffix}\0{$contents}";
 

@@ -13,6 +13,13 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   package-toolkit's secret reader (now `^1.3`) and named by its type only (`[int] given.`). The
   cluster definition and every cluster setting value are now `#[SensitiveParameter]`, so no stack
   frame carries the token when a cluster fails to resolve, whichever setting is at fault.
+- A malformed kubeconfig no longer puts its credentials into a stack trace. Every
+  `KubeConfigLoader` parameter carrying part of the kubeconfig (a user entry with its `token`,
+  `client-key-data`, password, `exec` env or `auth-provider` config; a cluster entry with its
+  `proxy-url`), and the decoded PEM written to a temp file, is now `#[SensitiveParameter]`. A YAML
+  syntax error now throws `KubeConfigException` (`Kubeconfig at <path> is not valid YAML (line
+  N).`) instead of Symfony's `ParseException`, whose message quoted the offending line and whose
+  frames carried the whole file. Which kubeconfigs load is unchanged.
 
 ## 1.2.0 - 2026-10-10
 

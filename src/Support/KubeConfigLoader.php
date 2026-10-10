@@ -6,6 +6,8 @@ namespace RoundlyConsulting\KubernetesApi\Support;
 
 use RoundlyConsulting\KubernetesApi\DataTransferObjects\KubeConfig;
 use RoundlyConsulting\KubernetesApi\Exceptions\KubeConfigException;
+use SensitiveParameter;
+use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -17,6 +19,11 @@ use Symfony\Component\Yaml\Yaml;
  * Without an explicit path every file in `KUBECONFIG` is merged the way kubectl merges
  * them: missing files are skipped, the first file to set `current-context` wins, and so
  * does the first file to define a cluster, user or context of a given name.
+ *
+ * A kubeconfig holds credentials (a user's token, client key, password, exec env; a
+ * cluster's proxy URL), so every parameter carrying a slice of it is
+ * `#[SensitiveParameter]` and no message quotes a value from it: a malformed kubeconfig
+ * must not put its secrets into a stack trace.
  */
 final class KubeConfigLoader
 {
@@ -86,8 +93,20 @@ final class KubeConfigLoader
             throw new KubeConfigException("Unable to read kubeconfig at {$path}.");
         }
 
-        /** @var array<string, mixed> $config */
-        $config = (array) Yaml::parse($contents);
+        try {
+            /** @var array<string, mixed> $config */
+            $config = (array) Yaml::parse($contents);
+        } catch (ParseException $e) {
+            // The parser's message quotes the offending line and its frames carry the
+            // whole file, credentials included: rethrow with the line number only, and
+            // without the parser's exception as the previous one.
+            throw new KubeConfigException(sprintf(
+                'Kubeconfig at %s is not valid YAML%s.',
+                $path,
+                $e->getParsedLine() > 0 ? " (line {$e->getParsedLine()})" : '',
+            ));
+        }
+
         $directory = $this->directoryOf($path);
 
         foreach (['clusters' => ['cluster', ['certificate-authority']], 'users' => ['user', ['client-certificate', 'client-key', 'tokenFile']]] as $section => [$key, $references]) {
@@ -139,7 +158,7 @@ final class KubeConfigLoader
      * @param  list<array<string, mixed>>  $configs
      * @return array<string, mixed>
      */
-    private function merge(array $configs): array
+    private function merge(#[SensitiveParameter] array $configs): array
     {
         $merged = ['clusters' => [], 'users' => [], 'contexts' => []];
         $seen = [];
@@ -173,7 +192,7 @@ final class KubeConfigLoader
      *
      * @param  array<string, mixed>  $user
      */
-    private function guardSupportedAuthentication(array $user, string $userName): void
+    private function guardSupportedAuthentication(#[SensitiveParameter] array $user, string $userName): void
     {
         $unsupported = match (true) {
             ! empty($user['exec']) => 'an exec credential plugin',
@@ -216,7 +235,7 @@ final class KubeConfigLoader
      *
      * @param  array<string, mixed>  $cluster
      */
-    private function insecureSkipTlsVerify(array $cluster, string $clusterName): bool
+    private function insecureSkipTlsVerify(#[SensitiveParameter] array $cluster, string $clusterName): bool
     {
         $value = $cluster['insecure-skip-tls-verify'] ?? null;
 
@@ -261,7 +280,7 @@ final class KubeConfigLoader
      * @param  array<string, mixed>  $config
      * @return array<string, mixed>
      */
-    private function findNamed(array $config, string $key, string $name): array
+    private function findNamed(#[SensitiveParameter] array $config, string $key, string $name): array
     {
         /** @var array<int, array<string, mixed>> $entries */
         $entries = (array) ($config[$key] ?? []);
@@ -276,7 +295,7 @@ final class KubeConfigLoader
     }
 
     /** @param array<string, mixed> $user */
-    private function resolveToken(array $user): ?string
+    private function resolveToken(#[SensitiveParameter] array $user): ?string
     {
         $token = $user['token'] ?? null;
 
@@ -308,7 +327,7 @@ final class KubeConfigLoader
      *
      * @param  array<string, mixed>  $source
      */
-    private function resolvePem(array $source, string $fileKey, string $dataKey, string $suffix): ?string
+    private function resolvePem(#[SensitiveParameter] array $source, string $fileKey, string $dataKey, string $suffix): ?string
     {
         $file = $source[$fileKey] ?? null;
 
