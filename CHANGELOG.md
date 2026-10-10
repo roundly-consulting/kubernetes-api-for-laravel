@@ -6,6 +6,8 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 
 ## Unreleased
 
+## 1.1.1 - 2026-10-10
+
 ### Fixed
 
 - `ConfigMap::getData('0')` and `Secret::getData('0')` now return the `"0"` entry. They returned
