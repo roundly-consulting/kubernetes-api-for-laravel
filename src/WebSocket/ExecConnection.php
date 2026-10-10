@@ -155,10 +155,32 @@ final class ExecConnection
         }
 
         if ($end === false || preg_match('/^HTTP\/\d(?:\.\d)? 101\b/', $response) !== 1) {
-            throw new WebSocketException('WebSocket upgrade failed: '.trim($response));
+            throw new WebSocketException($this->upgradeFailure($response, $end));
         }
 
         return substr($response, $end + 4);
+    }
+
+    /**
+     * Why the upgrade failed, without the raw response (a proxy may echo the request's
+     * `Authorization` header, a redirect's `Location` may carry a token): the status
+     * line, plus the apiserver's Status `message` when one arrived with it — unless the
+     * cluster redacts errors.
+     */
+    private function upgradeFailure(string $response, int|false $end): string
+    {
+        $failure = preg_match('/^HTTP\/\d(?:\.\d)? \d{3}(?: [\x20-\x7E]{0,64})?/', $response, $status) === 1
+            ? 'WebSocket upgrade failed: '.rtrim($status[0])
+            : 'WebSocket upgrade failed: no valid HTTP response';
+
+        if ($end === false || $this->cluster->redactsErrors()) {
+            return $failure;
+        }
+
+        $body = json_decode(substr($response, $end + 4), true);
+        $message = is_array($body) ? ($body['message'] ?? null) : null;
+
+        return is_string($message) && trim($message) !== '' ? "{$failure}: {$message}" : $failure;
     }
 
     /**

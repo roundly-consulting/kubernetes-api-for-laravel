@@ -29,8 +29,11 @@ return [
      * `follow_redirects` opts the cluster in to following HTTP redirects (off: the
      * apiserver never redirects, and a followed redirect would replay the token, the
      * client certificate and a write's body; a 3xx then throws a KubernetesException).
-     * `verify` and `follow_redirects` are booleans read strictly: anything but a boolean
-     * spelling throws a ClusterConfigurationException naming the key.
+     * `redact_errors` cuts KubernetesException messages to status and reason
+     * (`HTTP 409 AlreadyExists`); without it they carry the apiserver's Status message,
+     * and never the raw body either way. `verify`, `follow_redirects` and
+     * `redact_errors` are booleans read strictly: anything but a boolean spelling throws a
+     * ClusterConfigurationException naming the key.
      * A setting that is not set — unset, null or blank (`KUBERNETES_TOKEN=`) — takes its
      * default (no token, `url`, `default` …); a set one must be a string, so a
      * non-string value throws a ClusterConfigurationException naming the key, as does
@@ -50,6 +53,7 @@ return [
             'namespace' => env('KUBERNETES_NAMESPACE'),
             'manager' => env('KUBERNETES_MANAGER'),
             'follow_redirects' => env('KUBERNETES_FOLLOW_REDIRECTS', false),
+            'redact_errors' => env('KUBERNETES_REDACT_ERRORS', false),
         ],
     ],
 

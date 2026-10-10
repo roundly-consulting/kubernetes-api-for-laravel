@@ -323,9 +323,13 @@ class KubernetesManager
             ->withManagerName($string('manager', $definition['manager'] ?? null))
             ->withDefaultNamespace($string('namespace', $definition['namespace'] ?? null) ?? $connection->namespace ?? 'default');
 
-        // Transport policy, applied whatever the source.
+        // Transport and error policy, applied whatever the source.
         if (self::flag($name, 'follow_redirects', $definition['follow_redirects'] ?? null, false)) {
             $cluster = $cluster->withRedirects();
+        }
+
+        if (self::flag($name, 'redact_errors', $definition['redact_errors'] ?? null, false)) {
+            $cluster = $cluster->withRedactedErrors();
         }
 
         return $cluster;
@@ -341,7 +345,7 @@ class KubernetesManager
     }
 
     /**
-     * A cluster switch (`verify`, `follow_redirects`), read strictly; not set (absent,
+     * A cluster switch (`verify`, `follow_redirects`, `redact_errors`), read strictly; not set (absent,
      * null or blank) takes the default. `filter_var()` once read a typo'd
      * `KUBERNETES_VERIFY_SSL` as false and turned TLS verification off without a
      * word; anything but a boolean spelling now throws, naming the cluster's key.

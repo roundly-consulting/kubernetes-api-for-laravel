@@ -17,6 +17,8 @@ declare(strict_types=1);
  *  - reject a 403 instead of the upgrade
  *  - whoami stdout is the request's Authorization header
  *  - redirect a 302 to another origin instead of the upgrade
+ *  - echo   a 502 whose HTML body echoes the request's Authorization header, as a broken
+ *           proxy does
  */
 
 $cert = getenv('TLS_CERT');
@@ -116,6 +118,10 @@ while (true) {
             break;
         case 'redirect':
             fwrite($client, "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/elsewhere?token=abc\r\nContent-Length: 0\r\n\r\n");
+            break;
+        case 'echo':
+            preg_match('/^Authorization: ([^\r\n]*)/mi', $request, $authorization);
+            fwrite($client, "HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/html\r\n\r\n<html>Authorization: ".($authorization[1] ?? 'none').'</html>');
             break;
         case 'reject':
             fwrite($client, "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{\"message\":\"pods \\\"api\\\" is forbidden\"}");

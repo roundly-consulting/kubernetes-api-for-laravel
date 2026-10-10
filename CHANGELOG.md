@@ -14,12 +14,25 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   opt-in is transport policy, so `applyConfig()` keeps it. An explicit
   `client.options.allow_redirects` is honoured as the global form for clusters that do not opt
   in.
+- `KubernetesException::status()`, `reason()`, `apiMessage()` and `details()`: the HTTP status
+  and the apiserver Status fields, read from the body on demand.
+- `Cluster::withRedactedErrors()` and `redactsErrors()`, plus the `clusters.*.redact_errors`
+  config key (`KUBERNETES_REDACT_ERRORS`, default off, read strictly): `KubernetesException`
+  messages carry status and reason only (`HTTP 409 AlreadyExists`), not even the Status
+  `message`. `apiMessage()`, `details()` and `$e->response` still read the body.
 
 ### Changed
 
 - A redirect (3xx) the client did not follow now throws `KubernetesException`, naming the
   status and the target's origin only (no path, query or body), and `ping()` reports false.
   Behaviour change: it used to read as an empty success.
+- A `KubernetesException` whose body has no Status `message` now reads
+  `Kubernetes API request failed: HTTP 502` (plus the Status `reason`, when there is one).
+  Behaviour change: it used to be Laravel's `HTTP request returned status code 502:` followed by
+  a summary of the raw body. Code that read a non-Status body from `getMessage()` must read
+  `$e->response->body()`. Messages that carry the apiserver's Status `message` are unchanged.
+- A refused exec upgrade (`WebSocketException`) now names the status line, plus the apiserver's
+  Status `message` when one arrived with it. It used to carry the raw response headers and body.
 
 ### Security
 
@@ -29,6 +42,11 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
   and had the target's answer parsed as the apiserver's. The apiserver never redirects an API
   call. Behaviour change: a cluster URL that redirects (e.g. `http://` to `https://`) now fails
   with a clear error. Fix the URL, or opt in.
+- Exception messages no longer carry the raw response body. Laravel's request exception embedded
+  a 120-character body summary, and its handler wrote that summary into the message on report
+  (replacing even the Status message), so an edge HTML page or a proxy that echoes the
+  `Authorization` header put the bearer token into logs and `failed_jobs`. A refused exec
+  upgrade had the same problem.
 
 ## 1.1.1 - 2026-10-10
 

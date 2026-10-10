@@ -55,6 +55,8 @@ final class Cluster
 
     private bool $followRedirects = false;
 
+    private bool $redactErrors = false;
+
     public function __construct(
         private readonly Transport $transport = new HttpTransport,
         private readonly ?string $name = null,
@@ -147,6 +149,28 @@ final class Cluster
     public function followsRedirects(): bool
     {
         return $this->followRedirects;
+    }
+
+    /**
+     * A copy of this client whose `KubernetesException` messages carry status and reason
+     * only (`HTTP 409 AlreadyExists`), not even the apiserver's Status `message`. Messages
+     * never carry the raw body either way; `apiMessage()`, `details()` and `$e->response`
+     * still read it for code that asks. {@see applyConfig()} keeps it.
+     */
+    public function withRedactedErrors(): self
+    {
+        $cluster = clone $this;
+        $cluster->redactErrors = true;
+
+        return $cluster;
+    }
+
+    /**
+     * Whether error messages are reduced to status and reason ({@see withRedactedErrors()}).
+     */
+    public function redactsErrors(): bool
+    {
+        return $this->redactErrors;
     }
 
     /**
@@ -255,9 +279,7 @@ final class Cluster
         }
 
         if ($response->failed()) {
-            $message = $response->json('message');
-
-            throw new KubernetesException($response, is_string($message) ? $message : null);
+            throw new KubernetesException($response, redacted: $this->redactErrors);
         }
 
         return $response;
