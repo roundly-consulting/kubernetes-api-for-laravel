@@ -16,6 +16,7 @@ declare(strict_types=1);
  *  - ping   a ping; stdout says whether the client answered with a pong
  *  - reject a 403 instead of the upgrade
  *  - whoami stdout is the request's Authorization header
+ *  - redirect a 302 to another origin instead of the upgrade
  */
 
 $cert = getenv('TLS_CERT');
@@ -112,6 +113,9 @@ while (true) {
         case 'whoami':
             preg_match('/^Authorization: ([^\r\n]*)/mi', $request, $authorization);
             fwrite($client, $upgrade.$frame("\x01".($authorization[1] ?? 'none')).$status(0).$frame('', 8));
+            break;
+        case 'redirect':
+            fwrite($client, "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/elsewhere?token=abc\r\nContent-Length: 0\r\n\r\n");
             break;
         case 'reject':
             fwrite($client, "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{\"message\":\"pods \\\"api\\\" is forbidden\"}");

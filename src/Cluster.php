@@ -53,6 +53,8 @@ final class Cluster
 
     private ?string $namespaceScope = null;
 
+    private bool $followRedirects = false;
+
     public function __construct(
         private readonly Transport $transport = new HttpTransport,
         private readonly ?string $name = null,
@@ -112,6 +114,42 @@ final class Cluster
     }
 
     /**
+     * A copy of this client that follows HTTP redirects, with Guzzle's defaults (up to
+     * five hops; `Authorization` and cookies are dropped on a hop to another origin).
+     * Off by default: the apiserver never redirects an API call, and a redirect would
+     * replay the bearer token, the client certificate and a write's body to wherever it
+     * points. Opt in only for a cluster URL you know redirects (e.g. a proxy). It is
+     * transport policy, not a credential, so {@see applyConfig()} keeps it.
+     */
+    public function withRedirects(): self
+    {
+        $cluster = clone $this;
+        $cluster->followRedirects = true;
+
+        return $cluster;
+    }
+
+    /**
+     * A copy of this client that does not opt in to redirects (the default). The global
+     * `client.options.allow_redirects`, when a host sets it, then applies.
+     */
+    public function withoutRedirects(): self
+    {
+        $cluster = clone $this;
+        $cluster->followRedirects = false;
+
+        return $cluster;
+    }
+
+    /**
+     * Whether this client opted in to following redirects ({@see withRedirects()}).
+     */
+    public function followsRedirects(): bool
+    {
+        return $this->followRedirects;
+    }
+
+    /**
      * The namespace this client is scoped to, or null when it is not scoped.
      */
     public function namespaceScope(): ?string
@@ -165,8 +203,8 @@ final class Cluster
     }
 
     /**
-     * Whether the apiserver answers `/version`. Connection failures, error responses
-     * and a cluster without a URL all report `false`; a client-side rate-limit
+     * Whether the apiserver answers `/version`. Connection failures, error responses,
+     * an unfollowed redirect and a cluster without a URL all report `false`; a client-side rate-limit
      * exhaustion still throws, because it says nothing about the server.
      */
     public function ping(): bool
@@ -197,7 +235,8 @@ final class Cluster
      *
      * @param  array<string, mixed>  $query
      *
-     * @throws KubernetesException when the apiserver answers with an error status
+     * @throws KubernetesException when the apiserver answers with an error status, or
+     *                             with a redirect (3xx) that was not followed
      */
     public function request(
         string $method,
@@ -208,6 +247,12 @@ final class Cluster
         bool $stream = false,
     ): Response {
         $response = $this->transport->send($this, $method, $path, $query, $body, $contentType, $stream);
+
+        // A 3xx reaching this point was not followed (redirects are off, or it could not be
+        // followed). It is no apiserver answer, so it must not read as an empty success.
+        if ($response->redirect()) {
+            throw KubernetesException::redirectNotFollowed($response, $this->getUrl());
+        }
 
         if ($response->failed()) {
             $message = $response->json('message');

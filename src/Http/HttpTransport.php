@@ -54,7 +54,9 @@ final class HttpTransport implements Transport
 
         $this->authenticate($request, $cluster);
 
-        $request->withOptions(self::clientOptions());
+        $options = self::clientOptions();
+        $request->withOptions($options);
+        $request->withOptions(['allow_redirects' => self::redirectPolicy($cluster, $options)]);
 
         if ($stream) {
             $request->withOptions($this->streamOptions());
@@ -129,6 +131,33 @@ final class HttpTransport implements Transport
         }
 
         return $options;
+    }
+
+    /**
+     * Guzzle's `allow_redirects` for one request, highest precedence first: the
+     * cluster's opt-in ({@see Cluster::withRedirects()}, Guzzle's defaults), then an
+     * explicit `client.options.allow_redirects` (an options array, or a boolean read
+     * strictly — the global form), then `false`. The apiserver never redirects, and a
+     * followed redirect replays the bearer token, the client certificate and a write's
+     * body, so nothing is followed unless asked for. Streams included.
+     *
+     * @param  array<array-key, mixed>  $options  the normalised `client.options`
+     * @return bool|array<array-key, mixed>
+     */
+    private static function redirectPolicy(Cluster $cluster, array $options): bool|array
+    {
+        if ($cluster->followsRedirects()) {
+            return true;
+        }
+
+        $key = 'kubernetes.client.options.allow_redirects';
+        $value = $options['allow_redirects'] ?? null;
+
+        if (is_array($value)) {
+            return $value;
+        }
+
+        return Config::for([$key => $value], ClusterConfigurationException::class)->boolean($key, false);
     }
 
     /**

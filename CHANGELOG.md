@@ -6,6 +6,30 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 
 ## Unreleased
 
+### Added
+
+- `Cluster::withRedirects()`, `withoutRedirects()` and `followsRedirects()`, plus the
+  `clusters.*.follow_redirects` config key (`KUBERNETES_FOLLOW_REDIRECTS`, default off, read
+  strictly): opt one cluster in to following HTTP redirects, with Guzzle's defaults. The
+  opt-in is transport policy, so `applyConfig()` keeps it. An explicit
+  `client.options.allow_redirects` is honoured as the global form for clusters that do not opt
+  in.
+
+### Changed
+
+- A redirect (3xx) the client did not follow now throws `KubernetesException`, naming the
+  status and the target's origin only (no path, query or body), and `ping()` reports false.
+  Behaviour change: it used to read as an empty success.
+
+### Security
+
+- HTTP redirects are no longer followed by default, on every apiserver request, streams
+  included. A followed redirect replayed the bearer token on a same-origin hop, presented the
+  client certificate to the new host, replayed a write's body (a Secret's data) on a 307 or 308,
+  and had the target's answer parsed as the apiserver's. The apiserver never redirects an API
+  call. Behaviour change: a cluster URL that redirects (e.g. `http://` to `https://`) now fails
+  with a clear error. Fix the URL, or opt in.
+
 ## 1.1.1 - 2026-10-10
 
 ### Fixed

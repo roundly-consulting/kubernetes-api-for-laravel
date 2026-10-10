@@ -303,7 +303,7 @@ class KubernetesManager
                 clientCertificatePath: $string('certificate', $definition['certificate'] ?? null),
                 clientKeyPath: $string('private_key', $definition['private_key'] ?? null),
                 certificateAuthorityPath: $string('ca_certificate', $definition['ca_certificate'] ?? null),
-                verify: self::verifies($name, $definition['verify'] ?? null),
+                verify: self::flag($name, 'verify', $definition['verify'] ?? null, true),
             ),
             'kubeconfig' => $this->loadKubeConfig(
                 $string('kubeconfig', $definition['kubeconfig'] ?? null),
@@ -318,10 +318,17 @@ class KubernetesManager
         };
 
         // The cluster's own `namespace` wins, then a kubeconfig context's, then `default`.
-        return $this->newCluster($name)
+        $cluster = $this->newCluster($name)
             ->applyConfig($connection)
             ->withManagerName($string('manager', $definition['manager'] ?? null))
             ->withDefaultNamespace($string('namespace', $definition['namespace'] ?? null) ?? $connection->namespace ?? 'default');
+
+        // Transport policy, applied whatever the source.
+        if (self::flag($name, 'follow_redirects', $definition['follow_redirects'] ?? null, false)) {
+            $cluster = $cluster->withRedirects();
+        }
+
+        return $cluster;
     }
 
     /**
@@ -334,15 +341,16 @@ class KubernetesManager
     }
 
     /**
-     * The cluster's `verify` switch, read strictly. `filter_var()` read a typo'd
+     * A cluster switch (`verify`, `follow_redirects`), read strictly; not set (absent,
+     * null or blank) takes the default. `filter_var()` once read a typo'd
      * `KUBERNETES_VERIFY_SSL` as false and turned TLS verification off without a
      * word; anything but a boolean spelling now throws, naming the cluster's key.
      */
-    private static function verifies(string $cluster, mixed $value): bool
+    private static function flag(string $cluster, string $leaf, mixed $value, bool $default): bool
     {
-        $key = "kubernetes.clusters.{$cluster}.verify";
+        $key = "kubernetes.clusters.{$cluster}.{$leaf}";
 
-        return Config::for([$key => $value], ClusterConfigurationException::class)->boolean($key, true);
+        return Config::for([$key => $value], ClusterConfigurationException::class)->boolean($key, $default);
     }
 
     /**

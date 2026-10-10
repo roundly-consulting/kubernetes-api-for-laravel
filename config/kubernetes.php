@@ -26,6 +26,11 @@ return [
      * field manager, sent as `fieldManager` on every write (a server-side apply
      * without one uses `kubernetes-api-for-laravel`) and as the user agent. Clusters
      * registered with `Kubernetes::registerCluster()` override entries of the same name.
+     * `follow_redirects` opts the cluster in to following HTTP redirects (off: the
+     * apiserver never redirects, and a followed redirect would replay the token, the
+     * client certificate and a write's body; a 3xx then throws a KubernetesException).
+     * `verify` and `follow_redirects` are booleans read strictly: anything but a boolean
+     * spelling throws a ClusterConfigurationException naming the key.
      * A setting that is not set — unset, null or blank (`KUBERNETES_TOKEN=`) — takes its
      * default (no token, `url`, `default` …); a set one must be a string, so a
      * non-string value throws a ClusterConfigurationException naming the key, as does
@@ -44,6 +49,7 @@ return [
             'context' => env('KUBERNETES_CONTEXT'),
             'namespace' => env('KUBERNETES_NAMESPACE'),
             'manager' => env('KUBERNETES_MANAGER'),
+            'follow_redirects' => env('KUBERNETES_FOLLOW_REDIRECTS', false),
         ],
     ],
 
@@ -57,7 +63,9 @@ return [
      * timeout). Both are read strictly: `timeout` must be a number of seconds, 0 or
      * more (0 = none), and `stream_timeout` an integer from 0 to 86400; anything else
      * (`five`, `5s`) throws a ClusterConfigurationException. A blank value is not set
-     * and takes the default.
+     * and takes the default. Redirects are not followed unless a cluster opts in
+     * (`follow_redirects`, `withRedirects()`); an `allow_redirects` set here (a boolean
+     * or Guzzle's options array) is the global form, used by clusters that do not.
      */
     'client' => [
         'options' => [
