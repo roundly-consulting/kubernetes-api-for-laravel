@@ -30,7 +30,7 @@ final class WebSocketFrame
     public static function encode(string $payload, int $opcode = self::OPCODE_BINARY): string
     {
         $length = strlen($payload);
-        $frame = chr(0x80 | $opcode);
+        $frame = chr((0x80 | $opcode) & 0xFF);
 
         if ($length <= 125) {
             $frame .= chr(0x80 | $length);
