@@ -87,15 +87,26 @@ final class HttpTransport implements Transport
     /**
      * A watch or a log follow is long-lived and may sit silent for minutes, so the
      * request-wide `timeout` must not cut it off: the stream gets no overall deadline.
-     * Connecting and the response headers stay bounded by that timeout, as an idle
-     * read timeout; {@see armIdleTimeout()} swaps it for the stream's own once the
-     * headers are in.
+     * Before Guzzle 8.3, connecting and the response headers stay bounded by that
+     * timeout, as an idle read timeout, and {@see armIdleTimeout()} swaps it for the
+     * stream's own once the headers are in.
      *
      * @return array<string, mixed>
      */
     private function streamOptions(): array
     {
         $options = ['stream' => true, 'timeout' => 0];
+
+        // Guzzle 8.3+ decodes a streamed (chunked) body itself, so the socket can no longer be
+        // detached and re-armed once the headers are in: its `read_timeout` is the body's idle
+        // timeout from the start. 0 means none, and the header wait falls back to PHP's
+        // default_socket_timeout.
+        if (class_exists('GuzzleHttp\\Handler\\ChunkedBodyStream')) {
+            $options['read_timeout'] = (float) self::streamTimeout();
+
+            return $options;
+        }
+
         $timeout = self::requestTimeout();
 
         if ($timeout !== null && $timeout > 0) {
