@@ -6,6 +6,19 @@ All notable changes to `kubernetes-api-for-laravel` are documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- **Breaking:** requires Laravel 13; Laravel 12 is no longer supported. Upgrade the application to Laravel 13 before updating.
+- Requires the 2.x releases of the Roundly packages it builds on (their Laravel 13 releases).
+- Maintenance: tested on PHP 8.4, 8.5 and 8.6; the test suite runs on Pest 5.
+
+### Fixed
+
+- With Guzzle 8.3 or later, a quiet watch or log follow no longer ends after `client.options.timeout`
+  seconds of silence. Guzzle 8.3 decodes streamed bodies itself, so the stream's idle timeout
+  (`client.stream_timeout`, none by default) now applies from the start; with none set, waiting for
+  the response headers is bounded by PHP's `default_socket_timeout`.
+
 ## 1.2.2 - 2026-10-11
 
 ### Changed
